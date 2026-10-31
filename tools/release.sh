@@ -17,7 +17,7 @@
 # pushes the commit and the tag and creates the GitHub release with the APK attached (gh).
 set -euo pipefail
 
-SIGNER=a9077d92e8b07112b1d966453ba711000c35cb37451b57eb326f804fa472f68d   # SHA-256 of the cars' APKs' certificate
+SIGNER=6e95449b0a7c5f7be8fa4f046a6dfd917d0216f764780a80c8977020f40a3f89   # SHA-256 of the cars' APKs' certificate
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 gradle_file="$root/android/app/build.gradle.kts"

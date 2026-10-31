@@ -221,8 +221,8 @@ class AppUpdater(private val context: Context, private val root: RootShell, priv
      * lives. False when there's no root (Android's installer does it then).
      */
     private fun installAsRoot(apk: File): Boolean {
-        val tmp = "/data/local/tmp/oceanfront-update.apk"
-        val log = "/data/local/tmp/oceanfront-update.log"
+        val tmp = "/data/local/tmp/${context.packageName}-update.apk"
+        val log = "/data/local/tmp/${context.packageName}-update.log"
         val staged = root.run("rm -f $log; cp '${apk.path}' $tmp && chmod 644 $tmp && echo staged", timeoutMs = 30_000) ?: return false
         if (!staged.contains("staged")) throw IOException("couldn't stage the APK for pm: ${staged.trim()}")
         // the activity by its class name: the package (applicationId) isn't the code's namespace, so ".MainActivity"
@@ -285,7 +285,7 @@ class AppUpdater(private val context: Context, private val root: RootShell, priv
 
     companion object {
         private const val TAG = "WebHud"
-        const val REPO = "benkayuk/oceanscape"   // OceanScape's own releases (signed with Ben's key)
+        const val REPO = "hiremani/oceanscape"   // this fork's own releases (signed with hiremani's key)
         private const val LATEST_URL = "https://api.github.com/repos/$REPO/releases/latest"
         private const val MOVING_MS = 1.0
         private const val ROOT_INSTALL_MS = 120_000L

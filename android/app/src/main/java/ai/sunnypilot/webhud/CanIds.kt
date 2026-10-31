@@ -17,9 +17,9 @@ object CanIds {
         "IBUS2" to emptySet(),
     )
 
-    /** The chips' hardware acceptance filters that let every RX ID through (HwFilters.kt applies them at start). */
+    /** The chips' hardware acceptance filters that let every RX ID and the driver's defaults through (HwFilters.kt applies them at start). */
     val HW_FILTERS: Map<String, HwFilter> = mapOf(
-        "IBUS1" to HwFilter(chip = 0, mask0 = 0x7E0, filters0 = listOf(0x460, 0x4E0), mask1 = 0x700, filters1 = listOf(0x100, 0x200, 0x300, 0x500)),   // passes 1088 of 2048 IDs
+        "IBUS1" to HwFilter(chip = 0, mask0 = 0x600, filters0 = listOf(0x200, 0x600), mask1 = 0x700, filters1 = listOf(0x100, 0x400, 0x500, 0x100)),   // passes 1792 of 2048 IDs
         "IBUS2" to HwFilter(chip = 1, mask0 = 0x600, filters0 = listOf(0x200, 0x0), mask1 = 0x7C0, filters1 = listOf(0x500, 0x580, 0x600, 0x640)),   // passes 1280 of 2048 IDs
     )
 }

@@ -33,7 +33,7 @@ a new hotspot subnet each time the hotspot starts).
 
 ## Staying connected
 
-The page is served by the app at `http://127.0.0.1:18089` (`LocalServer`): its files from the APK's
+The page is served by the app at `http://127.0.0.1:18090` (`LocalServer`): its files from the APK's
 assets (`assets/www/`, copied in from the repo at build time), and `/api/...`, the `/ws` stream and the camera view's `/video`
 relayed to the comma byte for byte (HTTP and the WebSocket alike). So:
 
@@ -89,7 +89,7 @@ Notification access is turned on at start through the root shell (`cmd notificat
 for the Android user the app runs as). Without root, turn it on once by hand:
 
 ```
-adb shell cmd notification allow_listener ai.sunnypilot.webhud/ai.sunnypilot.webhud.HudListener 10
+adb shell cmd notification allow_listener ai.sunnypilot.oceanscape.hiremani/ai.sunnypilot.webhud.HudListener 10
 ```
 
 (`10` is the user on Android Automotive; `0` on a phone.) The page asks for everything when it loads
@@ -141,8 +141,8 @@ mask)` for some filter of a buffer. Its defaults pass only parts of the ID range
 seat and mirror positions (0x4F3, 0x4F5), the liftgate (0x471), the steering angle and yaw rate (0x1C2,
 0x112), the battery current (0xE9), the charging times (0x630, 0x634) and the odometer (0x641). So at
 start `HwFilters` writes the plan in `CanIds.HW_FILTERS` instead: `gen_ibus.py` searches the tightest
-masks and filters that let every ID in `CanIds.RX` through (IBUS1 0x200–0x5FF plus four 8-ID windows
-in 0x100–0x1FF, IBUS2 0x000–0x3FF plus 0x500–0x53F, 0x580–0x5BF, 0x600–0x67F). The files belong to
+masks and filters that let through every ID in `CanIds.RX` and everything the defaults pass, so Pulse's
+own app keeps its IDs (IBUS1 0x100–0x7FF, IBUS2 0x000–0x3FF plus 0x500–0x53F, 0x580–0x5BF, 0x600–0x67F). The files belong to
 root, so it goes through the app's root shell (`Link.root`); without root the driver's own values stay
 and the log says so (`CAN hardware filters left as they are`). The wider filters mean more SPI
 interrupts for IDs we don't read; the kernel-side `CAN_RAW` filters in the helper still keep those from

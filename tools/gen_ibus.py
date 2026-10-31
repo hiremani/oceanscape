@@ -84,7 +84,14 @@ READOUT_SKIP_PREFIX = "ADAS_"
 # for one of its filters. Its defaults pass only parts of the ID range (IBUS1 ~0x200-0x3FF and 0x500-0x7FF,
 # IBUS2 0x200-0x23F, 0x300-0x37F, 0x500-0x53F, 0x580-0x5BF), which blocks the steering angle, yaw rate,
 # seat and liftgate positions, battery current and charging times. The app sets these instead at start
-# (HwFilters.kt): the tightest masks and filters that let every ID in RX through.
+# (HwFilters.kt): the tightest masks and filters that let every ID in RX through and everything the defaults
+# pass, so Pulse's own app, which shares these chips, keeps every ID it had.
+DRIVER_DEFAULTS = {
+  "IBUS1": [*range(0x200, 0x400), *range(0x500, 0x800)],
+  "IBUS2": [*range(0x200, 0x240), *range(0x300, 0x380), *range(0x500, 0x540), *range(0x580, 0x5C0)],
+}
+
+
 def hexes(ids) -> str:
   return ", ".join(f"0x{i:X}" for i in ids)
 
@@ -276,12 +283,12 @@ def write_js(msgs: list[dict], path: str) -> None:
       out.append(f"  {{ bus: '{bus}', addr: 0x{addr:X}, name: '{name}', len: {m['len']}, cyclic: {cyclic}, cycleMs: {m['cycle']}, signals: [")
       out += [js_signal(s) for s in m["signals"]]
       out.append("  ]},")
-  plans = {bus: hw_filters(ids) for bus, ids in RX.items()}
+  plans = {bus: hw_filters([*ids, *DRIVER_DEFAULTS[bus]]) for bus, ids in RX.items()}
   out += ["];", "",
           "// What the app's CAN helper lets through (receive) and the only IDs it may send, per bus (CanIds.kt has the same).",
           "export const RX_IDS = " + js_ids(RX) + ";",
           "export const TX_IDS = " + js_ids(TX) + ";", "",
-          "// The chips' hardware acceptance filters the app sets at start so every RX ID gets through (see gen_ibus.py).",
+          "// The chips' hardware acceptance filters the app sets at start so every RX ID and the driver's defaults get through (see gen_ibus.py).",
           "export const HW_FILTERS = {",
           *[f"  {bus}: {{ mask0: 0x{p['mask0']:X}, filters0: [{hexes(p['filters0'])}], mask1: 0x{p['mask1']:X}, "
             + f"filters1: [{hexes(p['filters1'])}], passes: {p['passes']} }},"
@@ -298,7 +305,7 @@ def js_ids(d: dict) -> str:
 def write_kt(path: str) -> None:
   def kt_set(ids):
     return "setOf(" + ", ".join(f"0x{a:X}" for a in ids) + ")" if ids else "emptySet()"
-  plans = {bus: hw_filters(ids) for bus, ids in RX.items()}
+  plans = {bus: hw_filters([*ids, *DRIVER_DEFAULTS[bus]]) for bus, ids in RX.items()}
   def kt_plan(bus, chip):
     p = plans[bus]
     return (f'HwFilter(chip = {chip}, mask0 = 0x{p["mask0"]:X}, filters0 = listOf({hexes(p["filters0"])}), '
@@ -322,7 +329,7 @@ object CanIds {{
         "IBUS2" to {kt_set(TX["IBUS2"])},
     )
 
-    /** The chips' hardware acceptance filters that let every RX ID through (HwFilters.kt applies them at start). */
+    /** The chips' hardware acceptance filters that let every RX ID and the driver's defaults through (HwFilters.kt applies them at start). */
     val HW_FILTERS: Map<String, HwFilter> = mapOf(
         "IBUS1" to {kt_plan("IBUS1", 0)}
         "IBUS2" to {kt_plan("IBUS2", 1)}
