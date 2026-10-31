@@ -362,6 +362,8 @@ export class Settings {
       ['showRoad', 'Inferred road', 'Fill in the road and lanes the cameras don\'t report, following the last known lanes and your path.'],
       ['mapRoad', 'Map road', 'Draw the road from the map: the roads around you, their junctions, and what stands along them, placed by the car\'s own motion with the GPS and heading eased in. The cameras\' lanes only pick the lane you\'re drawn in. Off, or without a map, the road is the cameras\' alone.'],
       ['showGround', 'Ground texture', 'Fine textured ground that moves under the car with its speed and steering.'],
+      ['miniMap', '2D map', 'A street map in a card at the top right that turns and moves with the car, with the road ahead and street names. ' +
+        'It draws the same map data as the map road, so it needs a GPS fix and the map of the area.'],
       ['showSigns', 'Traffic lights & signs', 'The map\'s signals, stop and yield signs, limits and crossings where the map has them (the signal ahead shows the camera\'s light), and the lights, signs and stop lines the car\'s camera reports, placed where they most likely are.'],
       ['showPath', 'Planned path', 'Blue band along openpilot\'s path while steering is engaged.'],
     ]));

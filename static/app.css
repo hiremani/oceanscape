@@ -558,3 +558,15 @@ aside.carpanel.hvac .fo-sheet__body > * + * { margin-top: 0; }
 pre.diag { margin: 8px 0 0; max-height: 46vh; overflow: auto; padding: 10px 12px; border-radius: 12px; background: #0d0f12; color: #d6dae0;
   font: 11.5px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 pre.diag:empty { display: none; }
+
+/* the 2D map (minimap.js): below the speed sign and the chips at the top right, and below the next-turn card where that
+   runs the full width. Touches pass through it to the 3D view. */
+.mapcard { position: absolute; right: 16px; top: calc(max(130px, var(--drive-h, 0px)) + 12px + var(--navcard-h, 0px)); z-index: 4;
+  width: clamp(180px, 30vw, 320px); aspect-ratio: 1; overflow: hidden; pointer-events: none; }
+.mm-canvas { display: block; width: 100%; height: 100%; }
+.mm-road { position: absolute; left: 8px; right: 8px; bottom: 8px; text-align: center; font: 600 12px/1.3 var(--font); color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); }
+.mm-road:empty, .mm-status:empty { display: none; }
+.mm-status { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 10px; background: var(--panel); color: var(--text); font: 600 11px/1.4 var(--font); }
+.mapcard.stale .mm-status { color: var(--amber); }
+html.carmode .mapcard { display: none; }

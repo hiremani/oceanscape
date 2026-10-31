@@ -2,6 +2,7 @@
 // app), joins the comma's stream when it is there, and wires the controls.
 import { $, $$, el, api, fmtTime, iconSvg, setClass, setText, store, save } from './util.js';
 import { CarScene } from './scene.js';
+import { MiniMap } from './minimap.js';
 import { CarControls } from './carcontrols.js';
 import { OCEAN_PAINT_DEFAULT, OCEAN_WHEELS_DEFAULT } from './models.js';
 import { LANE_CONF_THRESHOLD } from './road.js';
@@ -25,7 +26,7 @@ const DEFAULTS = {
   showPath: true, showUss: true, showOpLeads: true, autoView: true, showGround: true, showRoad: true, showSigns: true,
   showTracks: true, showRadar: false, radarAllTracks: false, showLowConf: false, showObjectStats: false, objectMode: 'world',
   laneHeadingSign: 1, laneCurvatureSign: 1, objectHeadingSign: 1, laneConfThreshold: LANE_CONF_THRESHOLD,
-  showFps: true, renderScale: 'auto', showMusic: true, showNav: true, demoInfotainment: false, demoCarState: false, carDemo: false,
+  showFps: true, renderScale: 'auto', showMusic: true, showNav: true, miniMap: true, demoInfotainment: false, demoCarState: false, carDemo: false,
   calibration: true, mapPrefetchKm: 25, positionSource: 'car', roadcam: 'mirror',
 };
 
@@ -101,6 +102,7 @@ class App {
 
     this.meter = new FrameMeter(this);
     this.info = new Infotainment(this);
+    this.miniMap = new MiniMap();
     this.carState = new CarState(this);
     this.cmd = new CarCommands(this);   // sending to the car, through the app
     // every frame the app reads on the car's buses also goes to the worker, which keeps the car's own view of the world
@@ -125,6 +127,7 @@ class App {
       try { this.roadcam.frame(); } catch (e) { this.reportError(e); }
       try { this.car.frame(dt); } catch (e) { this.reportError(e); }
       try { if (state) this.hud.update(state, settings, this.vehicle); } catch (e) { this.reportError(e); }
+      try { this.miniMap.update(state, settings, now); } catch (e) { this.reportError(e); }
       try { this.info.frame(dt); } catch (e) { this.reportError(e); }
       try { this.carState.frame(); } catch (e) { this.reportError(e); }
       this.meter.tick(now, dt * 1000, performance.now() - t0);
