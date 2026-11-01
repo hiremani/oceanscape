@@ -18,7 +18,7 @@ import { mapReference, mapRoadFrame, mapAlignMatrix, freshPlacement, mapDisagree
 import { RoadNetwork } from './roadnet.js';
 import { MapFeatures } from './mapfeatures.js';
 import { StopMark } from './stopmark.js';
-import { nextStop, plan as stopPlan, decelFor } from './stopplan.js';
+import { nextStop, passedStops, plan as stopPlan, decelFor } from './stopplan.js';
 import { STEER_RATIO } from './vehicle.js';
 import { centerFromFace, glide, poseBefore } from './objplace.js';
 
@@ -1445,12 +1445,18 @@ export class CarScene {
     const layer = this.mapFeatures.layer, showStop = showMap && s.stopPlan !== false;
     const stop = showStop && layer ? nextStop(layer.features, this.pose, undefined, Number(s.stopOffsetM) || 0) : null;
     if (stop) {
-      const op = this.state && this.state.op;
+      const op = this.state && this.state.op, wp = this.state && this.state.pose;
       const v = op && op.carState ? op.carState.vEgo : f && f.vehicle && f.vehicle.speedKph != null ? f.vehicle.speedKph / 3.6 : 0;
       const gap = f && f.acc && f.acc.timeGap;
-      this.ourStop = { ...stop, v, gap, plan: stopPlan(stop.along, v, decelFor(gap)) };
+      // the distance is measured from the estimate, not the shown pose the view follows: after a GPS correction the
+      // shown pose closes on the estimate over 2 s (pose.js), and that gap is error here. `off` is how far it was behind
+      const off = wp && wp.offset ? -wp.offset.along : 0;
+      const along = stop.along + off;
+      const info = wp ? { gpsAge: wp.gpsAge, gpsLag: wp.gpsLag, sigma: wp.sigma, quality: wp.quality, off: Math.round(off * 10) / 10, conf: map && map.conf != null ? Math.round(map.conf * 100) / 100 : null, src: s.positionSource || null } : null;
+      this.ourStop = { ...stop, along, v, gap, info, plan: stopPlan(along, v, decelFor(gap)) };
     } else this.ourStop = null;
     this.stopMark.update(stop, this.ourStop && this.ourStop.plan, showStop);
+    this.passedStops = showStop && layer ? passedStops(layer.features, this.pose, stop) : [];
   }
 
   /** Give the map's ground-fixed layers the reference's rigid placement (mapsurface.js mapAlignMatrix). Without a

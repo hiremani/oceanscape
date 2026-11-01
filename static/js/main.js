@@ -147,7 +147,7 @@ class App {
   markStop() {
     const st = this.scene.ourStop;
     if (!st) { this.toast('No stop sign in hand'); return; }
-    if (st.v >= 2) { this.toast('Tap it when stopped at the line'); return; }
+    if (st.v >= 4) { this.toast('Tap it when stopped, or nearly, at the line'); return; }
     const m = this.stopLog.mark(st);
     if (m == null) { this.toast('Not on an approach'); return; }
     const mph = this.hud.unitFor(this.settings, this.liveState() && this.liveState().fisker) === 'mph';
@@ -157,8 +157,9 @@ class App {
 
   /** One observation of the stop ahead for the log, and the log saved when a stop was passed. */
   _stopLog() {
-    const st = this.scene.ourStop;
-    this.stopLog.observe(st, st ? st.v : 0, Date.now() / 1000, st ? st.gap : undefined);
+    const st = this.scene.ourStop, t = Date.now() / 1000;
+    this.stopLog.observe(st, st ? st.v : 0, t, st ? st.gap : undefined, st ? st.info : null);
+    if (this.scene.passedStops && this.scene.passedStops.length) this.stopLog.notice(this.scene.passedStops, t);
     if (this.stopLog.changed) { this.stopLog.changed = false; save('stoplog', this.stopLog.records); }
   }
 

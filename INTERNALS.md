@@ -356,9 +356,15 @@ point (`atM`, negative past it), the lowest speed, the gap, and how far away the
 lost for under 3 s does not end a stop; a sign never approached (within 15 m, after driving up to it from at
 least 8 m further out at over 2 m/s) is not a pass. A tap on the stop alert while stopped (`main.js markStop`)
 marks the real stop line: `markM` is where the car was against the map's stop point, so the marks' median is
-the map's bias on these roads. The first drive found the map's point about 9 m beyond the real line at one
-sign; each record carries the crossing road's half width (`cross`) and the arm count, to tell a line placed too
-near the intersection's centre from a position error along the road. The **stop line offset** setting
+the map's bias on these roads. The first drives read 30 to 60 ft to go with the car at the sign, on OSM nodes that sit 6 to 13 m before
+the intersection node (where the sign is, so the line's placement is not the cause); each record carries the
+crossing road's half width (`cross`), the arm count, how the position was known (`info`: GPS age and lag,
+sigma, quality, the shown pose's offset from the estimate, the match confidence) and a 1 Hz trace of
+distance and speed over the approach, to tell a position error along the road from a lagging one. The
+distance is measured from the pose estimate, not the shown pose the view follows (which closes on a
+correction over 2 s). Stop signs passed within 25 m that were not ours are logged once as `notOurs` with the
+angle their arm faces and the lateral offset, so a sign the HUD did not announce can be told from one the map
+lacks. The **stop line offset** setting
 (`stopOffsetM`, applied in `nextStop`) moves the point along the road to undo a consistent bias. Settings >
 Driving shows the summary (passes, stops, the median stop point, overshoots, the marks' median), the last
 eight, and copies the records as JSON. Its purpose is to measure how far the map's stop lines can be trusted on

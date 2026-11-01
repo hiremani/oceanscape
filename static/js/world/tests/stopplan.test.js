@@ -1,7 +1,7 @@
 // Stop signs ahead (stopplan.js): which stop holds us, the slow-down plan, the band line, the log.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextStop, plan, decelFor, stopLine, StopLog, STOP_MARGIN_M, STOP_LINE_BACK } from '../../stopplan.js';
+import { nextStop, passedStops, plan, decelFor, stopLine, StopLog, STOP_MARGIN_M, STOP_LINE_BACK } from '../../stopplan.js';
 
 const MPH = 0.44704;
 // a stop sign 60 m ahead on our road (heading east), its crossing road 4 m half wide: the line is 5 m before the node
@@ -23,6 +23,12 @@ describe('nextStop', () => {
     assert.equal(nextStop([{ id: 1, kind: 'signal', x: 50, y: 0, arms: [{ h: 0, half: 5 }] }], pose), null);
   });
   test('all-way stops say so', () => { assert.equal(nextStop([stop(60, { all: true })], pose).all, true); });
+  test('the stop signs passed that are not ours, with why', () => {
+    const away = stop(10, { id: 2, arms: [{ h: Math.PI, half: 5, cross: 0 }] });   // the other direction's sign
+    const side = { ...stop(5, { id: 3 }), y: 12 };                                   // a side road's
+    const p = passedStops([stop(60), away, side, stop(80, { id: 4 })], pose, { id: 7 });
+    assert.deepEqual(p.map(x => [x.id, x.face, x.left]), [[2, 180, 0], [3, 0, 12]]);
+  });
 });
 
 describe('plan', () => {
@@ -93,7 +99,7 @@ describe('StopLog', () => {
     log.observe({ id: 11, along: 12 }, 0, t += 30);
     log.observe(null, 0, t += 5);
     assert.equal(log.records.length, 1);
-    assert.deepEqual(log.summary(), { n: 1, stopped: 0, medianAt: null, overshot: 0, rolled: 1, marks: 0, medianMark: null });
+    assert.deepEqual(log.summary(), { n: 1, stopped: 0, medianAt: null, overshot: 0, rolled: 1, marks: 0, medianMark: null, notOurs: 0 });
   });
   test('the driver\'s mark says where the real line was against the map\'s point', () => {
     const log = new StopLog();
@@ -107,6 +113,16 @@ describe('StopLog', () => {
     assert.equal(r.markM, 3);
     assert.equal(r.cross, 3.5);
     assert.deepEqual([log.summary().marks, log.summary().medianMark], [1, 3]);
+    assert.ok(r.trace.length >= 7 && r.trace.length <= 16, `trace ${r.trace.length}`);   // about 1 Hz over the approach
+    assert.deepEqual(r.trace[0].length, 3);
+  });
+  test('a sign passed that was not ours is logged once, apart from the passes', () => {
+    const log = new StopLog();
+    log.notice([{ id: 21, dist: 12, face: 180, left: 0 }], 5);
+    log.notice([{ id: 21, dist: 8, face: 180, left: 0 }], 6);
+    assert.equal(log.records.length, 1);
+    assert.equal(log.records[0].reason, 'notOurs');
+    assert.deepEqual([log.summary().n, log.summary().notOurs], [0, 1]);
   });
   test('the stop line offset moves the line along the road', () => {
     const base = nextStop([stop(60)], pose).along;

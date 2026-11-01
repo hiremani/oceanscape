@@ -222,10 +222,14 @@ export class Settings {
     const m = (v) => unit === 'mph' ? `${Math.round(v * 3.28084)} ft` : `${v.toFixed(1)} m`;
     const when = (t) => new Date(t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     const rel = (v) => v >= 0 ? m(v) + ' before' : m(-v) + ' past';
-    const rows = log.records.slice(-8).reverse().map(r => el('div.row',
-      el('div.lbl', el('b', `${r.all ? 'All-way stop' : 'Stop'} · ${when(r.t)}`),
-        el('small', (r.stopped ? `Stopped ${rel(r.atM)} the map's stop point` : `Slowest ${rel(r.atM)} it, ${unit === 'mph' ? Math.round(r.minKph / 1.609) + ' mph' : r.minKph + ' km/h'}`) +
-          (r.markM != null ? ` · you marked the line ${rel(r.markM)} it` : '') + (r.cross ? ` · crossing road ${m(r.cross)} half wide` : ' · no crossing road known')))));
+    const rows = log.records.slice(-8).reverse().map(r => r.reason === 'notOurs'
+      ? el('div.row', el('div.lbl', el('b', `Stop sign passed, not announced · ${when(r.t)}`),
+        el('small', `${m(r.dist)} away, facing ${r.face}° from our heading, ${m(Math.abs(r.left))} to the ${r.left >= 0 ? 'left' : 'right'}: ` + (r.face > 35 ? 'it holds another direction' : 'it stood on another road'))))
+      : el('div.row',
+        el('div.lbl', el('b', `${r.all ? 'All-way stop' : 'Stop'} · ${when(r.t)}`),
+          el('small', (r.stopped ? `Stopped ${rel(r.atM)} the map's stop point` : `Slowest ${rel(r.atM)} it, ${unit === 'mph' ? Math.round(r.minKph / 1.609) + ' mph' : r.minKph + ' km/h'}`) +
+            (r.markM != null ? ` · you marked the line ${rel(r.markM)} it` : '') + (r.cross ? ` · crossing road ${m(r.cross)} half wide` : ' · no crossing road known') +
+            (r.info ? ` · position: ${r.info.quality}, GPS ${r.info.gpsAge} s old, ±${r.info.sigma} m` : '')))));
     const off = Number(app.settings.stopOffsetM) || 0;
     const step = unit === 'mph' ? 1.524 : 1;   // 5 ft or 1 m
     const setOff = (v) => { app.setSetting('stopOffsetM', Math.round(Math.max(-15, Math.min(15, v)) * 1000) / 1000); this.renderDrivingSoon(); };
