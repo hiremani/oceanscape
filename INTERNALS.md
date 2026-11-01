@@ -107,7 +107,10 @@ on this car). The view anchors the objects to the ground, so parked cars stay pu
 scene's own ego motion now uses the gyro too. *Raw sources* draws each source as it reports. Radar
 tracks younger than 1.3 s are hidden unless *All radar tracks* is on. A world object is drawn with its
 center half a car length beyond the reported point along the car's own axis (half a width when seen
-side-on), since every source reports the face nearest us.
+side-on), since every source reports the face nearest us, blending between the two from 49 to 70 degrees off its
+axis so the center doesn't jump as we pass it. Its position and velocity estimates move it together, and only the gap a
+new estimate opens closes over 0.35 s (`objplace.js`), so corrections are smoothed while its own motion doesn't lag. A
+snapshot is placed through the car's pose when it was taken, then carried to the present on the object's velocity.
 
 Before fusing, each source is corrected by the *measured sensor calibration* (`MEASURED_CALIBRATION` in
 `world_model.js`, *Display → Geometry calibration*, on by default). Its values come from replaying
@@ -247,13 +250,15 @@ Drawing it (`static/js/mapsurface.js`, `ground.js`, `scene.js` `_road`; *Display
 road sources, never blended. The cameras' road model (`road.js`, the single arc from the lane lines) always
 runs and is what the view draws when there is no map: no tiles, no match, the toggle off. Once the matcher
 has had the road under us for half a second the view switches to the map's road and stays on it until the
-match has been gone for two seconds (the last good match carries it through a short coast). The map is
+match has been gone for three seconds, or the lanes have asked for a slide of 6 m or more for three seconds (the map isn't
+where the road is; it comes back once they ask for 4 m or less, or the lanes are gone, for as long) (the last good match carries it through a short coast). The map is
 then the road's only geometry: its centerline polyline is the ground field's reference instead of the arc,
 with the carriageway as wide as the lane count says, and the lane lines are the map road's own structure
 (edges, a two-way road's centerline, lane boundaries) as parallel offsets of it, opened at the junctions
 along it. What the cameras add is *which lane* the car is drawn in: the map has no lanes and the GPS and
 the OSM centerline are both meter-level, so the car is placed in a lane of the map's road (counted from the
-right) and the whole map slides sideways -- with a 1.5 s time constant, never faster than 0.4 m/s -- so
+right) and the whole map slides sideways -- with lanes seen with a 0.4 s time constant and at most 1.5 m/s, so the
+pose's corrections don't glide the road under the car; without them with 1.5 s and 0.4 m/s -- so
 that lane's center passes where the cameras see the ego lane's center at the car (lanes 3.6 m wide, the
 map's, since the network's lines are drawn with that). A lane change moves the lane index, not the map. Without lanes
 seen the car keeps the lane it had (or starts in the right lane); only a GPS that insists for five seconds

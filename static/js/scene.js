@@ -14,10 +14,11 @@ import { PowerTrails, motorLoad } from './tracks.js';
 import { ObjectLabels } from './labels.js';
 import { Cutaway } from './cutaway.js';
 import { NavArrow } from './navarrow.js';
-import { mapReference, mapRoadFrame, mapAlignMatrix, freshPlacement, lineAlong, junctions, cutByStations } from './mapsurface.js';
+import { mapReference, mapRoadFrame, mapAlignMatrix, freshPlacement, mapDisagrees, lineAlong, junctions, cutByStations } from './mapsurface.js';
 import { RoadNetwork } from './roadnet.js';
 import { MapFeatures } from './mapfeatures.js';
 import { STEER_RATIO } from './vehicle.js';
+import { centerFromFace, glide, poseBefore } from './objplace.js';
 
 const EGO_LEN = 4.775;
 const EGO_W = 1.98;
@@ -40,8 +41,8 @@ const RADAR_OPACITY = 0.5;            // radar view: see-through cars...
 const RADAR_CAR = { w: 2.0, l: 4.8, hgt: 1.6 };   // ...a touch bigger than most cars, so a matching camera car sits inside
 const RADAR_EXTRAPOLATE_S = 0.12;     // carry a radar track on its own velocity at most this far past a cycle (65 ms)
 const RADAR_MATURE_AGE = 20;          // radar view: cycles (1.3 s) before a track is shown, unless "All radar tracks"
-const WORLD_EASE_S = 0.08;            // world objects glide onto each new estimate over about this long
-const SIDE_ON_COS = 0.5;              // world objects seen over 60 deg off their length axis are placed by their side
+const WORLD_EASE_S = 0.35;            // a new estimate's correction to a world object closes over about this long
+const SNAPSHOT_AGE_MAX_S = 0.25;      // a snapshot older than this when drawn is placed as if it were this old
 const CONF_HIDE = 0.35, CONF_FULL = 0.65;   // world objects fade in between these confidences (world_model.py)...
 const LOW_CONF_ALPHA = 0.2;           // ...or, with "Low-confidence objects", never fainter than this
 const DEG = Math.PI / 180;
@@ -1097,7 +1098,12 @@ export class CarScene {
     const now = this.clock;
     if (show && this.stateSeq !== this.worldSeq) {
       this.worldSeq = this.stateSeq;
-      const p = this.pose, zr = this.ego.userData.rearAxleZ ?? REAR_AXLE_Z;
+      // the objects are relative to the car when the snapshot was taken: place them through that pose, then carry them
+      // to now on their own velocity, or anything not moving with us steps by its closing speed x this age
+      const vs = this.vehicle, rate = vs ? vs.rate : 0;
+      const age = Math.min(SNAPSHOT_AGE_MAX_S, Math.max(0, (performance.now() - (this.stateAt || 0)) / 1000));
+      const v = vs ? vs.v : 0, w = vs ? (vs.hasYaw ? vs.w : v * vs.curvature) : 0;
+      const p = poseBefore(this.pose, v, w, age), zr = this.ego.userData.rearAxleZ ?? REAR_AXLE_Z;
       const c = Math.cos(p.h), sn = Math.sin(p.h);
       const op = st.op || {};
       const engaged = !!(op.selfdriveState && op.selfdriveState.enabled);
@@ -1113,27 +1119,14 @@ export class CarScene {
         e.cls = cls;
         e.dims = worldDims(o, kind);
         if (!e.size) e.size = { ...e.dims };
-        // the sources report the face nearest us: a car's rear (its front if it's behind us), or its side once we
-        // look at it side-on, so its center is half a length (or width) on along its own axes. Not along the line
-        // of sight: that threw cars in the next lane up to ~1.4 m further out as we came up on them.
-        const d = Math.hypot(o.x, o.y), hd = (o.heading || 0) * DEG, ax = Math.cos(hd), ay = Math.sin(hd);
-        let cx = o.x, cy = o.y;
-        if (d > 2) {
-          const along = (o.x * ax + o.y * ay) / d;   // cosine between our line of sight and its length
-          if (Math.abs(along) >= SIDE_ON_COS) {
-            const k = Math.sign(along) * e.dims.l / 2;
-            cx += k * ax; cy += k * ay;
-          } else {
-            const k = Math.sign(o.y * ax - o.x * ay) * e.dims.w / 2;   // which of its sides faces us
-            cx -= k * ay; cy += k * ax;
-          }
-        }
+        // the sources report the face nearest us; its center is half a length (or width) on along its own axes
+        const [cx, cy] = centerFromFace(o.x, o.y, (o.heading || 0) * DEG, e.dims.l, e.dims.w);
         // car frame (x ahead of the front bumper, y left) -> ground, through the rear axle's pose
         const xr = cx + zr;
-        e.tx = p.x + c * xr - sn * cy;
-        e.ty = p.y + sn * xr + c * cy;
         e.vx = c * o.vx - sn * o.vy;
         e.vy = sn * o.vx + c * o.vy;
+        e.tx = p.x + c * xr - sn * cy + e.vx * age * rate;
+        e.ty = p.y + sn * xr + c * cy + e.vy * age * rate;
         e.th = p.h + (o.heading || 0) * DEG;
         if (e.wx == null || Math.hypot(e.tx - e.wx, e.ty - e.wy) > 15) { e.wx = e.tx; e.wy = e.ty; e.h = e.th; }
         e.lastSeen = now;
@@ -1150,7 +1143,7 @@ export class CarScene {
     }
     const t = this.theme;
     const rate = this.vehicle ? this.vehicle.rate : 0;   // data seconds per real second (0 while paused)
-    const k = 1 - Math.exp(-dt / WORLD_EASE_S), kHead = 1 - Math.exp(-dt / 0.2), kSize = 1 - Math.exp(-dt / 0.4);
+    const kHead = 1 - Math.exp(-dt / 0.2), kSize = 1 - Math.exp(-dt / 0.4);
     for (const [id, e] of this.worldObjs) {
       const dead = !show || now - e.lastSeen > 0.3;
       const target = dead ? 0 : e.vis;
@@ -1161,10 +1154,7 @@ export class CarScene {
         continue;
       }
       e.pivot.visible = e.alpha > 0.01;
-      e.tx += e.vx * dt * rate;
-      e.ty += e.vy * dt * rate;
-      e.wx += (e.tx - e.wx) * k;
-      e.wy += (e.ty - e.wy) * k;
+      glide(e, dt, rate, WORLD_EASE_S);
       e.h += (((e.th - e.h + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI) * kHead;
       for (const d of ['w', 'l', 'hgt']) e.size[d] += (e.dims[d] - e.size[d]) * kSize;
       fitScale(e.group, e.cls, e.size.w, e.size.l, e.size.hgt);
@@ -1420,14 +1410,19 @@ export class CarScene {
       // a new frame: everything held in the old one goes (the horizon kept through a coast, the map layers' geometry)
       this.placeSeq = seq;
       this.place = freshPlacement();
+      this.mapTrust = { off: false, t: 0 };
       this.lastMap = matched ? map : null;
       this.mapGroup.matrix.identity(); this.mapGroup.matrixWorldNeedsUpdate = true;
       this.roadnet.clear();
       this.mapFeatures.clear();
     }
-    src.fade = Math.max(0, Math.min(1, src.fade + (src.mode === 'map' ? dt : -dt) / MAP_FADE_S));
     const zr = this.ego.userData.rearAxleZ ?? REAR_AXLE_Z;
-    this.mapRef = src.mode === 'map' && this.lastMap ? mapReference(this.lastMap, this.pose, this.roadOut, { ...s, trafficSide: leftTraffic(s, this.state?.fisker) ? 'left' : 'right' }, zr, this.place, dt, src.fade) : null;
+    // the placement keeps running while the map has given way to the cameras, which is how it finds they agree again
+    const ref = src.mode === 'map' && this.lastMap ? mapReference(this.lastMap, this.pose, this.roadOut, { ...s, trafficSide: leftTraffic(s, this.state?.fisker) ? 'left' : 'right' }, zr, this.place, dt, 1) : null;
+    const giveWay = mapDisagrees(this.mapTrust || (this.mapTrust = { off: false, t: 0 }), ref, dt);
+    src.fade = Math.max(0, Math.min(1, src.fade + (src.mode === 'map' && !giveWay ? dt : -dt) / MAP_FADE_S));
+    if (ref) ref.reveal = src.fade;
+    this.mapRef = giveWay ? null : ref;
     this.mapFrame = this.mapRef ? mapRoadFrame(this.mapRef, this.road.odo) : null;
     this.field.update(this.roadOut, this.ground, s.showRoad === false ? 0 : this.roadTint, this.mapRef);
     // the map around the car: the roads (ground-fixed; a new layer arrives as the car moves) and what stands along them.

@@ -5,7 +5,7 @@
 // degree and a meter or two. What the cameras' lane model adds is *which lane* the car is drawn in: the
 // map has no lanes, the GPS and the OSM centerline are both meter-level, so the car is placed in a lane of
 // the map's road (counted from the right), and the whole map slides sideways -- slowly, never faster than
-// a walking pace -- so that lane's center passes where the cameras see the ego lane's center at the car. A
+// a walking pace, a little quicker with lanes seen -- so that lane's center passes where the cameras see the ego lane's center at the car. A
 // lane change moves the lane index, not the map. Without lanes seen the car keeps the lane it had (or
 // starts in the right lane); only a GPS that insists for seconds that we are a lane over moves it. The
 // lane lines drawn are the map road's own structure (its edges, centerline, lane boundaries) at the lane
@@ -23,6 +23,12 @@ const BRANCH_MIN_LANES = 1;
 // the placement (see above)
 const SHIFT_TAU_S = 1.5;                 // s: the slide closes on its target with this time constant...
 const SHIFT_RATE = 0.4;                  // m/s: ...and never faster
+// With lanes seen the cameras are the truth across the road, so the slide takes up the pose's corrections as they come
+// (they reach 0.05 + 0.02 |v| m/s, pose.js) instead of gliding the road under the car behind them. The car's real
+// moves don't pass through here: the pose and the lanes move together, and the target stays where it was.
+const LOCK_TAU_S = 0.4, LOCK_RATE = 1.5;
+// Sliding the map this far (m) with lanes seen means it isn't where the road is: the cameras' road is drawn instead
+const DISAGREE_ON_M = 6.0, DISAGREE_OFF_M = 4.0, DISAGREE_S = 3.0;
 const SHIFT_MAX = 12.0;                  // m: the most the map is slid (beyond it the lanes and the map disagree about the road; the
                                          // slide stays at the limit rather than letting go, so nothing jumps)
 const LANE_CHANGE_W = 0.5;               // lane widths the ego lane's center jumps by when the cameras move us to the next lane
@@ -125,13 +131,24 @@ export function placeInLane(place, frame, road, dt) {
   // the slide: the centerline drawn at yCenter - laneCenter, so the ego lane's center is where the cameras see it
   const laneCenter = centers[p.lane];
   const target = clamp((yCenter - laneCenter) - frame.yMap0, -SHIFT_MAX, SHIFT_MAX);
-  let dShift = (target - p.shift) * k(SHIFT_TAU_S);
-  if (place) dShift = clamp(dShift, -SHIFT_RATE * dt, SHIFT_RATE * dt);
+  let dShift = (target - p.shift) * k(shown ? LOCK_TAU_S : SHIFT_TAU_S);
+  if (place) { const rate = shown ? LOCK_RATE : SHIFT_RATE; dShift = clamp(dShift, -rate * dt, rate * dt); }
   p.shift += dShift;
   // no turn: the pose's heading (the car's heading sensor, 0.15 deg) places the map's direction; letting the lanes
   // turn it about the car, even by a degree or two, swung everything far ahead as the angle settled
   p.dh = 0;
   return { shift: p.shift, dh: 0, lane: p.lane, laneW: W, laneCenter, shown };
+}
+
+/** Whether the map has to give way to the cameras' road, this frame. `s` ({off, t}) is kept by the view: the map goes
+ *  once the lanes have asked for a slide past DISAGREE_ON_M for DISAGREE_S, and comes back once they ask for less than
+ *  DISAGREE_OFF_M, or nothing because they have gone, for as long. */
+export function mapDisagrees(s, ref, dt) {
+  const far = !!ref && ref.lanesShown && Math.abs(ref.shift) >= DISAGREE_ON_M;
+  const near = !ref || !ref.lanesShown || Math.abs(ref.shift) <= DISAGREE_OFF_M;
+  s.t = (s.off ? near : far) ? s.t + dt : 0;
+  if (s.t >= DISAGREE_S) { s.off = !s.off; s.t = 0; }
+  return s.off;
 }
 
 /**

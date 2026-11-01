@@ -24,7 +24,7 @@
 import { DBC, hexToBytes } from './dbc.js';
 import { StateBuilder, wireFrames } from './state.js';
 import { MapData } from './mapdata.js';
-import { CommaMerge } from './merge.js';
+import { CommaMerge, ibusBatches } from './merge.js';
 
 const RAW_RATE_HZ = 5;
 
@@ -121,7 +121,9 @@ self.onmessage = (ev) => {
       }
     } else if (msg.type === 'ibus') {
       if (local) {
-        local.feedCan(merge.filterIbus(msg.frames.map(f => [f.addr, hexToBytes(f.data), f.bus === 'IBUS2' ? 2 : 0]), msg.t), msg.t);
+        for (const [t, frames] of ibusBatches(msg.frames, msg.t)) {
+          local.feedCan(merge.filterIbus(frames.map(f => [f.addr, hexToBytes(f.data), f.bus === 'IBUS2' ? 2 : 0]), msg.t), t);
+        }
         localT = msg.t;
       }
     } else if (msg.type === 'raw') {

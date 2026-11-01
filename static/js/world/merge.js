@@ -18,8 +18,24 @@ import { BUS_RADAR } from './fisker_radar.js';
 
 export const COMMA_PREFER_S = 0.5;   // an IBUS2 frame is dropped while the comma gave the same message this recently
 const OFFSET_JUMP_S = 2.0;           // a step this large in the clock offset is a restart, not jitter
-const OFFSET_RELAX = 0.02;           // per tick, toward a larger offset (the minimum filter's slow leak)
+const OFFSET_RELAX = 0.002;          // per tick, toward a larger offset: enough for clock drift, too little for weak Wi-Fi's delays to move it
 const ACTIVE_S = 1.0;                // the comma counts as merged this long after its last tick
+
+const IBUS_STAMP_S = 0.01;           // frames read within this of each other are fed as one batch
+const IBUS_STAMP_MAX_AGE_S = 0.5;    // an older stamp is a new page's copy of the last frames, not when they arrived
+
+/** The app's frames [{addr, data, bus, t?: ms}] as batches [t, frames] in reading order, each at the time it was read.
+ *  Without a stamp (an older app), or with an unusable one, a frame is timed at `wall`, when the page got it. */
+export function ibusBatches(frames, wall) {
+  const out = [];
+  for (const f of frames) {
+    const at = f.t / 1000;
+    const t = at > wall - IBUS_STAMP_MAX_AGE_S && at <= wall ? Math.round(at / IBUS_STAMP_S) * IBUS_STAMP_S : wall;
+    const last = out[out.length - 1];
+    if (last && last[0] === t) last[1].push(f); else out.push([t, [f]]);
+  }
+  return out;
+}
 
 export class CommaMerge {
   /** local: the car's own StateBuilder (IBUS DBC, the radar's DBC, brand fisker). */

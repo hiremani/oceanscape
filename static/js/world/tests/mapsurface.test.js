@@ -1,7 +1,7 @@
 // The road reference placed from a map horizon (static/js/mapsurface.js): the map's shape, the car put in a lane on it.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { POLY_MAX, lineAlong, mapReference, mapRoadFrame, mapAlignMatrix, laneCenters, freshPlacement, placeInLane } from '../../mapsurface.js';
+import { POLY_MAX, lineAlong, mapReference, mapRoadFrame, mapAlignMatrix, laneCenters, freshPlacement, placeInLane, mapDisagrees } from '../../mapsurface.js';
 
 const AXLE = 4.775 - 0.93;
 const DEG = Math.PI / 180;
@@ -190,6 +190,74 @@ describe('placeInLane', () => {
     for (let i = 0; i < 20; i++) { r = placeInLane(place, frame(-1.8, 2, true), noLanes, 0.1); assert.ok(Math.abs(r.shift - prev) <= 0.04 + 1e-9); prev = r.shift; }
   });
 
+});
+
+describe('placeInLane with lanes seen', () => {
+  const frame = (yMap0) => ({ yMap0, hMap: 0, lanes: 4, oneWay: false, wayId: 1 });
+  const dt = 1 / 60;
+  /** A GPS correction moving the map sideways at the pose's fastest at 65 mph; how far the drawn lane strays. */
+  const stray = (road) => {
+    const place = freshPlacement();
+    let y = 5.4, worst = 0;
+    for (let i = 0; i < 300; i++) placeInLane(place, frame(y), road, dt);
+    for (let i = 0; i < 300; i++) {
+      y += 0.65 * dt;
+      const r = placeInLane(place, frame(y), road, dt);
+      worst = Math.max(worst, Math.abs(y + r.shift + r.laneCenter));
+    }
+    return worst;
+  };
+
+  test('a pose correction hardly moves the lanes off where the cameras see them', () => {
+    const worst = stray(roadModel(0)); assert.ok(worst > 0.1 && worst < 0.3, String(worst));
+  });
+
+  test('without lanes it glides as before', () => {
+    assert.ok(stray(roadModel(0, 0, 0, false)) > 1, String(stray(roadModel(0, 0, 0, false))));
+  });
+
+  test('the car moving within its lane moves nothing on the map', () => {
+    const place = freshPlacement();
+    let r;
+    for (let i = 0; i < 300; i++) r = placeInLane(place, frame(5.4), roadModel(0), dt);
+    const before = r.shift;
+    for (let i = 1; i <= 60; i++) r = placeInLane(place, frame(5.4 - 0.5 * i / 60), roadModel(-0.5 * i / 60), dt);
+    assert.ok(Math.abs(r.shift - before) < 1e-6);
+  });
+
+  test('a large disagreement closes no faster than the lock allows', () => {
+    const place = freshPlacement();
+    let r = placeInLane(place, frame(5.4), roadModel(0), dt);
+    r = placeInLane(place, frame(8.4), roadModel(0), dt);
+    assert.ok(Math.abs(r.shift) <= 1.5 * dt + 1e-9, String(r.shift));
+  });
+});
+
+describe('mapDisagrees', () => {
+  const seen = (shift) => ({ lanesShown: true, shift });
+  const hold = (s, ref, seconds) => { let off; for (let i = 0; i < seconds * 10; i++) off = mapDisagrees(s, ref, 0.1); return off; };
+
+  test('the map gives way only to a large slide that lasts', () => {
+    const s = { off: false, t: 0 };
+    assert.equal(hold(s, seen(5), 10), false);
+    assert.equal(hold(s, seen(7), 2), false);
+    assert.equal(hold(s, seen(5), 1), false);
+    assert.equal(hold(s, seen(-7), 2), false, 'the time starts over');
+    assert.equal(hold(s, seen(-7), 1.5), true);
+  });
+
+  test('without lanes there is nothing to disagree with', () => {
+    assert.equal(hold({ off: false, t: 0 }, { lanesShown: false, shift: 12 }, 10), false);
+  });
+
+  test('it comes back once they agree, or the lanes have gone', () => {
+    const s = { off: true, t: 0 };
+    assert.equal(hold(s, seen(5), 10), true, 'between the limits it stays');
+    assert.equal(hold(s, seen(3), 3.5), false);
+    const gone = { off: true, t: 0 };
+    assert.equal(hold(gone, { lanesShown: false, shift: 12 }, 3.5), false);
+    assert.equal(hold({ off: true, t: 0 }, null, 3.5), false);
+  });
 });
 
 describe('mapRoadFrame', () => {

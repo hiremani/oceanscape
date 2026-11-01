@@ -1,13 +1,13 @@
 // The comma's ticks folded into the car's own view (merge.js): the clock, which frames are taken, and the
 // IBUS2 copies the comma's ADAS bus replaces.
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DBC, hexToBytes } from '../dbc.js';
 import { StateBuilder } from '../state.js';
-import { CommaMerge, COMMA_PREFER_S } from '../merge.js';
+import { CommaMerge, COMMA_PREFER_S, ibusBatches } from '../merge.js';
 import { radarDbc } from './helpers.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -75,4 +75,22 @@ test('openpilot\'s services join the car\'s view; carParams leaves the decoder o
   assert.ok(Math.abs(b.services.radarState.mdMonoTime - (19.95 + 3980)) < 1e-9);
   const snap = b.snapshot(wall);
   assert.equal(snap.op.carState.vEgo, 12);
+});
+
+describe('ibusBatches', () => {
+  const wall = 1000;
+  const f = (addr, ms) => ({ addr, data: '00', bus: 'IBUS1', t: ms });
+
+  test('frames are timed when they were read, in reading order', () => {
+    const out = ibusBatches([f(1, 999900), f(2, 999902), f(3, 999950)], wall);
+    assert.equal(out.length, 2);
+    assert.ok(Math.abs(out[0][0] - 999.9) < 1e-6 && Math.abs(out[1][0] - 999.95) < 1e-6);
+    assert.deepEqual(out[0][1].map(x => x.addr), [1, 2]);
+  });
+
+  test('an older app, an old copy for a new page, or a stamp from the future are timed at arrival', () => {
+    for (const frame of [{ addr: 1, data: '00', bus: 'IBUS1' }, f(1, 900000), f(1, 1000100)]) {
+      assert.deepEqual(ibusBatches([frame], wall), [[wall, [frame]]]);
+    }
+  });
 });

@@ -191,7 +191,7 @@ object CanBridge {
             if (parts.size != 3) continue
             val bus = BUS[parts[0]] ?: continue
             synchronized(busSeen) { busSeen[parts[0]] = System.currentTimeMillis() }
-            val f = JSONObject().put("bus", bus).put("addr", parts[1].toInt(16)).put("data", parts[2])
+            val f = JSONObject().put("bus", bus).put("addr", parts[1].toInt(16)).put("data", parts[2]).put("t", System.currentTimeMillis())
             synchronized(latest) { latest[bus + "/" + parts[1]] = f }
             if (!loggedFirst) { loggedFirst = true; Log.i(TAG, "CAN frames flowing (first: ${f.getString("bus")} ${parts[1]})") }
             batch.add(f)
