@@ -587,10 +587,9 @@ function seatControls(seat, driver) {
     { id: `seat.${seat}.heat`, type: 'levels', label: 'Heat', kind: 'heat', max: 3, def: driver ? 2 : 0, live: map(heatSig, HEAT_FROM_CAR), tx: pulse(MSG.SEATHEAT, heatReq, HEAT_TO_CAR) },
     { id: `seat.${seat}.pos`, type: 'seatpos', label: 'Position', def: { ...SEAT_MEMORY[1] }, driver,
       live: driver ? seatFromCar : undefined,
-      // the head unit's manual-move requests, held: ICC_0x533 every 100 ms while a button is down, then "Off"
-      moves: driver
-        ? { slide: 'ICC_DrvrSeatTrackManReq', recline: 'ICC_DrvrSeatBackManReq', front: 'ICC_DrvrSeatTiltManReq', rear: 'ICC_DrvrHeiManReq' }
-        : { slide: 'ICC_PassSeatTrackManReq', recline: 'ICC_PassSeatBackManReq' } },
+      // ICC_0x533 went out clean on the car and the seat didn't move, and the head unit sends that message itself:
+      // not sent until that's understood. The car's own switches work, and the position still reads back.
+      moveOff: 'The seat doesn\'t answer this yet: use the seat\'s own switches' },
     ...(driver ? [
       { id: 'seat.memory', type: 'memory', label: 'Memory', def: 1, tx: pulse(MSG.SEATHEAT, 'ICC_DrvrID', v => v + 1), noSave: 'Saving a position is a head unit key: hold its memory button' },   // ICC_DrvrID Mem_1 = 2
       T('seat.easy', 'Easy entry', true, 'Slides the seat back for getting in and out; the car doesn\'t report whether it\'s on', { tx: pulse(MSG.SEATHEAT, 'ICC_SeatWelFctEnaReq', { true: 2, false: 1 }) }),

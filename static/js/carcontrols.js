@@ -31,6 +31,7 @@ const MOCK_OFF = 'Mockup: nothing on the car for this';   // carcatalog.js MOCK:
 export function kindOf(c) {
   if (!c) return 'demo';
   if (c.acc) return 'comma';
+  if (c.moveOff) return c.live ? 'reads' : 'unavailable';
   if (c.tx || c.moves || c.winSig || c.kind === 'liftctl' || c.sunroof || c.sends) return 'sends';
   if (c.live) return 'reads';
   if (c.off && c.off !== MOCK_OFF) return 'unavailable';
@@ -1193,6 +1194,7 @@ export class CarControls {
       backrest.setAttribute('transform', `rotate(${(q.recline / Math.PI * 180).toFixed(1)} 101 72)`);
     };
     const nudge = (key, sign) => {
+      if (c.moveOff && this.inApp) return;
       if (this.liveIds.has(id)) return;   // the car's seat moves by the car's request below, and reports where it is
       const q = { ...this.v[id] }, [lo, hi] = SEAT_LIMITS[key];
       q[key] = Math.max(lo, Math.min(hi, q[key] + sign * SEAT_STEP[key]));
@@ -1203,10 +1205,12 @@ export class CarControls {
     // held: the head unit's manual-move request every 100 ms (ICC_0x533: 1 = forward / up, 2 = back / down),
     // then "Off"; without the car's link, the mockup's seat moves instead
     const hold = (label, text, key, sign) => {
-      const b = el('button', { 'aria-label': label, title: label }, text);
+      const b = el('button', { 'aria-label': label, title: c.moveOff && this.inApp ? c.moveOff : label }, text);
+      setClass(b, 'off', c.moveOff && this.inApp);
       let timer = 0, holding = false;
       const sig = c.moves && c.moves[key];
       const start = () => {
+        if (c.moveOff && this.inApp) { this.app.toast(c.moveOff); return; }
         if (sig && this.inApp) {
           if (!this.sending) { this.app.toast(this.cmd.why || 'Not connected to the car'); return; }
           holding = this.cmd.hold(MSG.SEATMOVE, { [sig]: sign > 0 ? 1 : 2 });
@@ -1225,7 +1229,7 @@ export class CarControls {
     const pair = (name, key, a, b) => el('div.fo-jog', el('small', name),
       hold(`${name} ${a[0]}`, a[1], key, a[2]), hold(`${name} ${b[0]}`, b[1], key, b[2]));
     // on the car the cushion tilts (its front edge) and rises as a whole (height); the mockup moves each edge
-    const car = !!(c.moves && this.inApp);
+    const car = !!((c.moves || c.moveOff) && this.inApp);
     const grid = el('div.fo-jogs',
       pair('Slide', 'slide', ['forward', '◀', 1], ['back', '▶', -1]),
       pair('Back', 'recline', ['up', '↶', -1], ['down', '↷', 1]),

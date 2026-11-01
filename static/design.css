@@ -424,3 +424,4 @@ html.fo { font-size: 16px; }
 .fo-tag.demo { border-style: dashed; }
 .fo-tile .fo-tag { display: block; width: max-content; margin: .375rem auto 0; }
 .fo .off .fo-tag { color: var(--fo-ink-3); }
+.fo-jog button.off { opacity: .4; }
