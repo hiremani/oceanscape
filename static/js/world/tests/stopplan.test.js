@@ -88,6 +88,11 @@ describe('StopLog', () => {
     log.observe({ id: 10, along: 150 }, 10, t += 1);
     log.observe(null, 10, t += 5);
     assert.equal(log.records.length, 1);
+    // parked 12 m from a stop sign, then the match goes: never an approach
+    log.observe({ id: 11, along: 12 }, 0, t += 1);
+    log.observe({ id: 11, along: 12 }, 0, t += 30);
+    log.observe(null, 0, t += 5);
+    assert.equal(log.records.length, 1);
     assert.deepEqual(log.summary(), { n: 1, stopped: 0, medianAt: null, overshot: 0, rolled: 1 });
   });
   test('a match lost for under three seconds does not end the stop', () => {

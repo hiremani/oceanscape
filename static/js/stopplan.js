@@ -98,9 +98,10 @@ export class StopLog {
       this._finish(stop ? 'next' : 'lost', t);
     }
     if (!stop) return;
-    if (!this.cur) this.cur = { id: stop.id, all: stop.all, gap: gap || null, t0: t, firstM: stop.along, minV: v, minVAt: stop.along, closest: stop.along, lastT: t };
+    if (!this.cur) this.cur = { id: stop.id, all: stop.all, gap: gap || null, t0: t, firstM: stop.along, minV: v, minVAt: stop.along, closest: stop.along, maxV: v, lastT: t };
     const c = this.cur;
     c.lastT = t;
+    c.maxV = Math.max(c.maxV, v);
     if (v < c.minV || (v === c.minV && stop.along < c.minVAt)) { c.minV = v; c.minVAt = stop.along - STOP_MARGIN_M; }
     c.closest = Math.min(c.closest, stop.along);
     if (stop.along < PASSED_M) this._finish('passed', t);
@@ -110,6 +111,7 @@ export class StopLog {
     const c = this.cur;
     this.cur = null;
     if (!c || c.closest > 15) return;   // never got near it: not a pass
+    if (c.maxV < 2 || c.firstM - c.closest < 8) return;   // never drove up to it (parked near one, or started beside it): not an approach
     this.records.push({ id: c.id, t: Math.round(t), all: c.all, gap: c.gap, firstM: Math.round(c.firstM), stopped: c.minV < STOPPED_MS,
       minKph: Math.round(c.minV * 3.6), atM: Math.round(c.minVAt * 10) / 10, reason });
     if (this.records.length > LOG_MAX) this.records.splice(0, this.records.length - LOG_MAX);
