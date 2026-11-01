@@ -1,33 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OceanScape: the sun on the sea's horizon over rolling waves; the 108dp canvas keeps the art inside the 66dp safe zone -->
+<!-- Mrichchhakatikam, "the little clay cart": a terracotta toy cart with a solid disc wheel, an arched hood and a pole
+     for the bull; the 108dp canvas keeps the art inside the 66dp safe zone -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- the shadow on the ground -->
     <path
-        android:fillColor="#F5A623"
-        android:pathData="M54,30a17,17 0 0,1 17,17h-34a17,17 0 0,1 17,-17z" />
+        android:fillColor="#D9C2A0"
+        android:pathData="M29,80a18,2.2 0 1,0 36,0a18,2.2 0 1,0 -36,0z" />
+    <!-- the hood -->
     <path
-        android:strokeColor="#F5A623"
+        android:fillColor="#C96A3A"
+        android:pathData="M28,45C28,33 38,28 47,28C56,28 66,33 66,45z" />
+    <path
+        android:strokeColor="#8E3F1F"
         android:strokeLineCap="round"
-        android:strokeWidth="3"
-        android:pathData="M54,22v-4M37,29l-3,-3M71,29l3,-3" />
+        android:strokeWidth="1.6"
+        android:pathData="M37,42V32.5M47,42V30.5M57,42V32.5" />
+    <!-- the pole, its tip turned up for the yoke -->
     <path
-        android:strokeColor="#ECEEF1"
-        android:strokeLineCap="round"
-        android:strokeWidth="3"
-        android:pathData="M26,51h56" />
-    <path
-        android:strokeColor="#7FD3E6"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:strokeWidth="4"
-        android:pathData="M26,63q7,-6 14,0t14,0t14,0t14,0" />
-    <path
-        android:strokeColor="#3FA7C4"
+        android:strokeColor="#8E3F1F"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
         android:strokeWidth="4"
-        android:pathData="M26,75q7,-6 14,0t14,0t14,0t14,0" />
+        android:pathData="M64,52H79Q84,52 84,47" />
+    <!-- the bed, with marks pressed into the clay -->
+    <path
+        android:fillColor="#B5552B"
+        android:strokeColor="#B5552B"
+        android:strokeLineJoin="round"
+        android:strokeWidth="3"
+        android:pathData="M24,45H70L66,56H28z" />
+    <path
+        android:fillColor="#F4E6D0"
+        android:pathData="M29.5,50a1.5,1.5 0 1,0 3,0a1.5,1.5 0 1,0 -3,0zM36,50a1.5,1.5 0 1,0 3,0a1.5,1.5 0 1,0 -3,0zM55,50a1.5,1.5 0 1,0 3,0a1.5,1.5 0 1,0 -3,0zM61.5,50a1.5,1.5 0 1,0 3,0a1.5,1.5 0 1,0 -3,0z" />
+    <!-- the solid wheel and its hub -->
+    <path
+        android:fillColor="#8E3F1F"
+        android:pathData="M32,64a15,15 0 1,0 30,0a15,15 0 1,0 -30,0z" />
+    <path
+        android:fillColor="#D9794A"
+        android:pathData="M37.5,64a9.5,9.5 0 1,0 19,0a9.5,9.5 0 1,0 -19,0z" />
+    <path
+        android:fillColor="#8E3F1F"
+        android:pathData="M43.5,64a3.5,3.5 0 1,0 7,0a3.5,3.5 0 1,0 -7,0z" />
 </vector>

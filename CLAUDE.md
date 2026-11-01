@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-OceanScape H: hiremani's fork of benkayuk's OceanScape, itself a fork of moistpope's Oceanfront View, a 3D HUD and car-controls page for the Fisker Ocean's center screen. It runs as an Android app on Pulse (the add-on board) and reads the car's IBUS1/IBUS2. A comma device running sunnypilot is optional.
+Mrichchhakatikam ("the little clay cart"): hiremani's fork of benkayuk's OceanScape, itself a fork of moistpope's Oceanfront View, a 3D HUD and car-controls page for the Fisker Ocean's center screen. It runs as an Android app on Pulse (the add-on board) and reads the car's IBUS1/IBUS2. A comma device running sunnypilot is optional.
 
-The docs still say "Oceanfront View" and name the upstream repo and package. This fork's real values are `applicationId = ai.sunnypilot.oceanscape.hiremani` (`android/app/build.gradle.kts`), local port 18090 (`LocalServer`) and releases from `hiremani/oceanscape` (`AppUpdater.REPO`), all so it runs beside Pulse's app and the other two builds. The Kotlin namespace stays `ai.sunnypilot.webhud`. Remotes: `origin` is the fork, `upstream` is `benkayuk/oceanscape`.
+The docs still say "Oceanfront View" and name the upstream repo and package. This fork's real values are the launcher name in `strings.xml`, `applicationId = ai.sunnypilot.oceanscape.hiremani` (`android/app/build.gradle.kts`), local port 18090 (`LocalServer`) and releases from `hiremani/oceanscape` (`AppUpdater.REPO`), all so it runs beside Pulse's app and the other two builds. The Kotlin namespace stays `ai.sunnypilot.webhud`. Remotes: `origin` is the fork, `upstream` is `benkayuk/oceanscape`.
 
 ## Commands
 

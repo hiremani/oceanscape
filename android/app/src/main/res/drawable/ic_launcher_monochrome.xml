@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The clay cart in one colour, for themed launcher icons: Android tints this by its alpha, so the parts stand apart
+     by gaps, not by shade -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="3"
+        android:pathData="M29,41C29,32 38,29 47,29C56,29 65,32 65,41" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="4"
+        android:pathData="M74,49H79Q84,49 84,44" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineJoin="round"
+        android:strokeWidth="3"
+        android:pathData="M24,45H70L67.5,52H26.5z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M34,68a13,13 0 1,0 26,0a13,13 0 1,0 -26,0zM43.5,68a3.5,3.5 0 1,0 7,0a3.5,3.5 0 1,0 -7,0z" />
+</vector>

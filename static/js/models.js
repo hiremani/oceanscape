@@ -246,7 +246,7 @@ export const OCEAN_PAINTS = [
   ['CBB', 'Black Pearl', '#313136', 'Gloss metallic'],
   ['CBK', 'Night Drive', '#1f1f20', 'Gloss solid'],
 ].map(([code, name, hex, finish]) => ({ code, name, hex, finish, ...PAINT_FINISH[finish] }));
-export const OCEAN_PAINT_DEFAULT = 'CSI';
+export const OCEAN_PAINT_DEFAULT = 'CGM';   // this car: Stealth Green
 export function oceanPaint(code) {
   return OCEAN_PAINTS.find(p => p.code === code) || OCEAN_PAINTS.find(p => p.code === OCEAN_PAINT_DEFAULT);
 }
