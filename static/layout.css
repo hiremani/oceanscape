@@ -94,8 +94,9 @@ html.carmode .hl-strip { z-index: 12; }
   padding-bottom: env(safe-area-inset-bottom); background: var(--glass-bg); border-top: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 -6px 24px rgba(20, 24, 31, 0.10); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); }
 html.lowfx .hl-bar { background: var(--glass-bg-solid); }
-.hl-btn { position: relative; flex: 1 1 96px; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 6px; margin: 8px 0 8px 8px; border: 1px solid var(--glass-border); border-radius: 16px;
-  background: var(--glass-bg); box-shadow: var(--glass-bevel), 0 3px 10px rgba(20, 24, 31, 0.08); color: var(--text); font: 500 12px/1 var(--font); letter-spacing: .03em; text-transform: uppercase; }
+.hl-btn { position: relative; flex: 1 1 96px; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 3px; margin: 8px 0 8px 8px; border: 1px solid var(--glass-border); border-radius: 16px;
+  background: var(--glass-bg); box-shadow: var(--glass-bevel), 0 3px 10px rgba(20, 24, 31, 0.08); color: var(--text); font: 500 11px/1 var(--font); letter-spacing: 0; text-transform: uppercase; }
+/* ten buttons across 1080 px leave ~90 px each: Pulse's Roboto is wider than the Mac's font, so the label has no spacing and 3 px padding */
 .hl-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hl-btn:last-child { margin-right: 8px; }
 .hl-btn i { display: inline-flex; width: 34px; height: 34px; color: var(--text); } .hl-btn i svg { width: 100%; height: 100%; }
@@ -119,7 +120,7 @@ html[data-layout="glance"] .mc-btn { width: 56px; height: 56px; } html[data-layo
 html[data-layout="glance"] .mapcard { top: auto; right: 16px; bottom: calc(112px + var(--hl-music-h, 0px) + 16px); width: 320px; }
 html[data-layout="glance"][data-driving="true"] .mapcard { width: 130px; border-radius: 14px; }
 html[data-layout="glance"][data-driving="true"] .mapcard .mm-road { display: none; }
-html[data-layout="glance"] .roadname { bottom: calc(112px + 80px + 16px); left: 16px; transform: none; }
+html[data-layout="glance"] .roadname { bottom: calc(112px + 80px + 16px); left: 96px; transform: none; }   /* clear of Pulse's own floating buttons along the left edge */
 html[data-layout="glance"][data-driving="false"] .roadname { bottom: calc(112px + 150px + 16px); }
 html[data-layout="glance"] #app:has(.musiccard:not(.hidden)) { --hl-music-h: 64px; }
 html[data-layout="glance"][data-driving="false"] #app:has(.musiccard:not(.hidden)) { --hl-music-h: 112px; }
