@@ -32,7 +32,7 @@ export function decelFor(gap) {
 /** The stop line ahead that holds us: the nearest stop sign's arm that faces our way, on our road, within
  *  STOP_LOOK_M. features: the layer's (pose frame); pose: {x, y, h} (rear axle, pose frame).
  *  Returns {id, along, left, all, x, y, h, half, oneWay} with `along` the distance to the stop line, or null. */
-export function nextStop(features, pose, look = STOP_LOOK_M) {
+export function nextStop(features, pose, look = STOP_LOOK_M, offset = 0) {
   if (!features || !pose) return null;
   const c = Math.cos(pose.h), s = Math.sin(pose.h);
   let best = null;
@@ -41,12 +41,13 @@ export function nextStop(features, pose, look = STOP_LOOK_M) {
     for (const a of f.arms) {
       if (Math.abs(wrap(a.h - pose.h)) > STOP_FACE_RAD) continue;
       const ux = Math.cos(a.h), uy = Math.sin(a.h);
-      const at = -((a.cross || 0) + STOP_LINE_BACK);   // the line's station from the node, along the arrival
+      // the line's station from the node, along the arrival; `offset` (the stop line offset setting) moves it, + further on
+      const at = -((a.cross || 0) + STOP_LINE_BACK) + offset;
       const x = f.x + ux * at, y = f.y + uy * at;
       const dx = x - pose.x, dy = y - pose.y;
       const along = c * dx + s * dy, left = -s * dx + c * dy;
       if (along < PASSED_M || along > look || Math.abs(left) > (a.half || 3.6) + 2) continue;
-      if (!best || along < best.along) best = { id: f.id, along, left, all: !!f.all, x, y, h: a.h, half: a.half || 3.6, oneWay: !!a.oneWay };
+      if (!best || along < best.along) best = { id: f.id, along, left, all: !!f.all, x, y, h: a.h, half: a.half || 3.6, oneWay: !!a.oneWay, cross: a.cross || 0, arms: f.arms.length };
     }
   }
   return best;
@@ -74,10 +75,11 @@ export function stopLine(stop, p, v, unit) {
   const dist = (m) => mph ? `${Math.round(m * 3.28084 / 5) * 5} ft` : `${Math.round(m / 5) * 5} m`;
   const spd = (ms) => mph ? `${Math.round(ms * 2.23694)} mph` : `${Math.round(ms * 3.6)} km/h`;
   const name = stop.all ? 'All-way stop' : 'Stop';
-  if (p.phase === 'at') return { cls: 'userPrompt', t1: v < STOPPED_MS ? `${name}: stopped` : `${name}: stop now`, t2: 'Advisory: the car does not brake for this' };
-  if (p.phase === 'slowing') return { cls: 'userPrompt', t1: `${name} in ${dist(stop.along)}`, t2: `Slow to ${spd(p.vTarget)} · ${p.a} m/s² · the car does not brake for this` };
-  if (v < 1) return { cls: 'info', t1: `${name} in ${dist(stop.along)}`, t2: 'Advisory: the car does not brake for this' };
-  return { cls: 'info', t1: `${name} in ${dist(stop.along)}`, t2: `Brake from ${dist(p.brake + STOP_MARGIN_M)} at ${p.a} m/s²` };
+  const tap = v < 2 ? ' · tap when at the real line' : '';
+  if (p.phase === 'at') return { cls: 'userPrompt', stop: true, t1: v < STOPPED_MS ? `${name}: stopped` : `${name}: stop now`, t2: 'Advisory: the car does not brake for this' + tap };
+  if (p.phase === 'slowing') return { cls: 'userPrompt', stop: true, t1: `${name} in ${dist(stop.along)}`, t2: `Slow to ${spd(p.vTarget)} · ${p.a} m/s² · the car does not brake for this` + tap };
+  if (v < 1) return { cls: 'info', stop: true, t1: `${name} in ${dist(stop.along)}`, t2: 'Advisory: the car does not brake for this' + tap };
+  return { cls: 'info', stop: true, t1: `${name} in ${dist(stop.along)}`, t2: `Brake from ${dist(p.brake + STOP_MARGIN_M)} at ${p.a} m/s²` };
 }
 
 /** Where the car really stopped, against the map's stop line, one record per stop sign passed. The records
@@ -98,13 +100,22 @@ export class StopLog {
       this._finish(stop ? 'next' : 'lost', t);
     }
     if (!stop) return;
-    if (!this.cur) this.cur = { id: stop.id, all: stop.all, gap: gap || null, t0: t, firstM: stop.along, minV: v, minVAt: stop.along, closest: stop.along, maxV: v, lastT: t };
+    if (!this.cur) this.cur = { id: stop.id, all: stop.all, gap: gap || null, t0: t, firstM: stop.along, minV: v, minVAt: stop.along - STOP_MARGIN_M, closest: stop.along, maxV: v, lastT: t,
+      cross: stop.cross, arms: stop.arms, markM: null };
     const c = this.cur;
     c.lastT = t;
     c.maxV = Math.max(c.maxV, v);
-    if (v < c.minV || (v === c.minV && stop.along < c.minVAt)) { c.minV = v; c.minVAt = stop.along - STOP_MARGIN_M; }
+    if (v < c.minV) { c.minV = v; c.minVAt = stop.along - STOP_MARGIN_M; }   // the first point at the lowest speed: where the car slowed most
     c.closest = Math.min(c.closest, stop.along);
     if (stop.along < PASSED_M) this._finish('passed', t);
+  }
+
+  /** The driver says "the real stop line is here": `markM` is where that was against the map's stop point (m before it,
+   *  negative past it). Returns that, or null when no stop is in hand. */
+  mark(stop) {
+    if (!this.cur || !stop || stop.id !== this.cur.id) return null;
+    this.cur.markM = Math.round((stop.along - STOP_MARGIN_M) * 10) / 10;
+    return this.cur.markM;
   }
 
   _finish(reason, t) {
@@ -113,16 +124,18 @@ export class StopLog {
     if (!c || c.closest > 15) return;   // never got near it: not a pass
     if (c.maxV < 2 || c.firstM - c.closest < 8) return;   // never drove up to it (parked near one, or started beside it): not an approach
     this.records.push({ id: c.id, t: Math.round(t), all: c.all, gap: c.gap, firstM: Math.round(c.firstM), stopped: c.minV < STOPPED_MS,
-      minKph: Math.round(c.minV * 3.6), atM: Math.round(c.minVAt * 10) / 10, reason });
+      minKph: Math.round(c.minV * 3.6), atM: Math.round(c.minVAt * 10) / 10, markM: c.markM, cross: c.cross, arms: c.arms, reason });
     if (this.records.length > LOG_MAX) this.records.splice(0, this.records.length - LOG_MAX);
     this.changed = true;
   }
 
-  /** The log in numbers: passes, stops, where the stops happened (median m before the point), overshoots. */
+  /** The log in numbers: passes, stops, where the stops happened (median m before the point), overshoots, and the
+   *  driver's marks (median m before the map's stop point: the map's bias, what the stop line offset should undo). */
   summary() {
     const r = this.records, stopped = r.filter(x => x.stopped);
-    const ats = stopped.map(x => x.atM).sort((a, b) => a - b);
-    const median = ats.length ? ats[ats.length >> 1] : null;
-    return { n: r.length, stopped: stopped.length, medianAt: median, overshot: stopped.filter(x => x.atM < -1).length, rolled: r.length - stopped.length };
+    const med = (xs) => { const s = xs.slice().sort((a, b) => a - b); return s.length ? s[s.length >> 1] : null; };
+    const marks = r.filter(x => x.markM != null).map(x => x.markM);
+    return { n: r.length, stopped: stopped.length, medianAt: med(stopped.map(x => x.atM)), overshot: stopped.filter(x => x.atM < -1).length,
+      rolled: r.length - stopped.length, marks: marks.length, medianMark: med(marks) };
   }
 }

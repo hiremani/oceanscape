@@ -29,7 +29,7 @@ const DEFAULTS = {
   showTracks: true, showRadar: true, radarAllTracks: false, showLowConf: false, showObjectStats: false, objectMode: 'world',
   laneHeadingSign: 1, laneCurvatureSign: 1, objectHeadingSign: 1, laneConfThreshold: LANE_CONF_THRESHOLD,
   showFps: true, renderScale: 'auto', showMusic: true, showNav: true, miniMap: true, demoInfotainment: false, demoCarState: false, carDemo: false,
-  calibration: true, mapPrefetchKm: 25, positionSource: 'car', roadcam: 'mirror', layout: 'classic', stopPlan: true,
+  calibration: true, mapPrefetchKm: 25, positionSource: 'car', roadcam: 'mirror', layout: 'classic', stopPlan: true, stopOffsetM: 0,
 };
 
 function loadSettings() {
@@ -140,6 +140,19 @@ class App {
     };
     requestAnimationFrame(loop);
     setInterval(() => this.watchdog(), 1000);
+  }
+
+  /** The driver, stopped at the real stop line, says so (a tap on the stop alert): the log keeps where that was against
+   *  the map's stop point, which is what the stop line offset should undo. */
+  markStop() {
+    const st = this.scene.ourStop;
+    if (!st) { this.toast('No stop sign in hand'); return; }
+    if (st.v >= 2) { this.toast('Tap it when stopped at the line'); return; }
+    const m = this.stopLog.mark(st);
+    if (m == null) { this.toast('Not on an approach'); return; }
+    const mph = this.hud.unitFor(this.settings, this.liveState() && this.liveState().fisker) === 'mph';
+    const d = mph ? `${Math.round(Math.abs(m) * 3.28084)} ft` : `${Math.abs(m).toFixed(1)} m`;
+    this.toast(`Marked: the map's stop point is ${d} ${m >= 0 ? 'ahead of' : 'behind'} you`);
   }
 
   /** One observation of the stop ahead for the log, and the log saved when a stop was passed. */

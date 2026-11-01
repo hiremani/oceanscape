@@ -353,10 +353,16 @@ openpilot's longitudinal control on the Fisker port is enabled and tuned.
 `StopLog` (`main.js _stopLog`, `webhud.stoplog` in local storage, 300 records) keeps one record per stop sign
 passed: whether the car came to rest (under 0.3 m/s), where its slowest point was in metres before the stop
 point (`atM`, negative past it), the lowest speed, the gap, and how far away the sign was first seen. A match
-lost for under 3 s does not end a stop; a sign never approached within 15 m is not a pass. Settings > Driving
-shows the summary (passes, stops, the median stop point, overshoots), the last eight, and copies the records
-as JSON. Its purpose is to measure how far the map's stop lines can be trusted on the roads driven, before
-anything brakes for them.
+lost for under 3 s does not end a stop; a sign never approached (within 15 m, after driving up to it from at
+least 8 m further out at over 2 m/s) is not a pass. A tap on the stop alert while stopped (`main.js markStop`)
+marks the real stop line: `markM` is where the car was against the map's stop point, so the marks' median is
+the map's bias on these roads. The first drive found the map's point about 9 m beyond the real line at one
+sign; each record carries the crossing road's half width (`cross`) and the arm count, to tell a line placed too
+near the intersection's centre from a position error along the road. The **stop line offset** setting
+(`stopOffsetM`, applied in `nextStop`) moves the point along the road to undo a consistent bias. Settings >
+Driving shows the summary (passes, stops, the median stop point, overshoots, the marks' median), the last
+eight, and copies the records as JSON. Its purpose is to measure how far the map's stop lines can be trusted on
+the roads driven, before anything brakes for them.
 
 ## Layouts
 

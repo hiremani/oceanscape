@@ -93,7 +93,25 @@ describe('StopLog', () => {
     log.observe({ id: 11, along: 12 }, 0, t += 30);
     log.observe(null, 0, t += 5);
     assert.equal(log.records.length, 1);
-    assert.deepEqual(log.summary(), { n: 1, stopped: 0, medianAt: null, overshot: 0, rolled: 1 });
+    assert.deepEqual(log.summary(), { n: 1, stopped: 0, medianAt: null, overshot: 0, rolled: 1, marks: 0, medianMark: null });
+  });
+  test('the driver\'s mark says where the real line was against the map\'s point', () => {
+    const log = new StopLog();
+    let t = 0;
+    for (let along = 60; along > 4; along -= 4) log.observe({ id: 5, along, cross: 3.5, arms: 1 }, 6, t += 0.5);
+    log.observe({ id: 5, along: 4, cross: 3.5, arms: 1 }, 0.1, t += 0.5);
+    assert.equal(log.mark({ id: 5, along: 4 }), 3);        // stopped 3 m before the map's stop point: the map stops late
+    assert.equal(log.mark({ id: 6, along: 4 }), null);     // another sign: not this approach
+    log.observe({ id: 5, along: -4 }, 3, t += 2);
+    const r = log.records[0];
+    assert.equal(r.markM, 3);
+    assert.equal(r.cross, 3.5);
+    assert.deepEqual([log.summary().marks, log.summary().medianMark], [1, 3]);
+  });
+  test('the stop line offset moves the line along the road', () => {
+    const base = nextStop([stop(60)], pose).along;
+    assert.ok(Math.abs(nextStop([stop(60)], pose, undefined, 3).along - (base + 3)) < 1e-9);
+    assert.ok(Math.abs(nextStop([stop(60)], pose, undefined, -2).along - (base - 2)) < 1e-9);
   });
   test('a match lost for under three seconds does not end the stop', () => {
     const log = new StopLog();

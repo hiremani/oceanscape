@@ -221,9 +221,14 @@ export class Settings {
     const unit = app.hud.unitFor(app.settings, app.liveState() && app.liveState().fisker);
     const m = (v) => unit === 'mph' ? `${Math.round(v * 3.28084)} ft` : `${v.toFixed(1)} m`;
     const when = (t) => new Date(t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const rel = (v) => v >= 0 ? m(v) + ' before' : m(-v) + ' past';
     const rows = log.records.slice(-8).reverse().map(r => el('div.row',
       el('div.lbl', el('b', `${r.all ? 'All-way stop' : 'Stop'} · ${when(r.t)}`),
-        el('small', r.stopped ? `Stopped ${r.atM >= 0 ? m(r.atM) + ' before' : m(-r.atM) + ' past'} the stop point` : `Rolled through at ${unit === 'mph' ? Math.round(r.minKph / 1.609) + ' mph' : r.minKph + ' km/h'}`))));
+        el('small', (r.stopped ? `Stopped ${rel(r.atM)} the map's stop point` : `Slowest ${rel(r.atM)} it, ${unit === 'mph' ? Math.round(r.minKph / 1.609) + ' mph' : r.minKph + ' km/h'}`) +
+          (r.markM != null ? ` · you marked the line ${rel(r.markM)} it` : '') + (r.cross ? ` · crossing road ${m(r.cross)} half wide` : ' · no crossing road known')))));
+    const off = Number(app.settings.stopOffsetM) || 0;
+    const step = unit === 'mph' ? 1.524 : 1;   // 5 ft or 1 m
+    const setOff = (v) => { app.setSetting('stopOffsetM', Math.round(Math.max(-15, Math.min(15, v)) * 1000) / 1000); this.renderDrivingSoon(); };
     const copy = async () => {
       try { await navigator.clipboard.writeText(JSON.stringify(log.records)); app.toast('Copied the stop log'); } catch (e) { app.toast('Copy failed: ' + e.message); }
     };
@@ -236,9 +241,13 @@ export class Settings {
       el('div.rows',
         el('div.row', el('div.lbl', el('b', 'Show the stop plan'), el('small', 'The strip on the road and the line in the alerts.')),
           app.switch(app.settings.stopPlan !== false, v => app.setSetting('stopPlan', v))),
+        el('div.row', el('div.lbl', el('b', 'Stop line offset'), el('small', `Moves the map's stop point ${off > 0 ? 'further on' : off < 0 ? 'back' : ''}${off ? ' by ' + m(Math.abs(off)) : ''}. ` +
+          'Set it to undo the bias the marks show: a median mark "3 m past" means the map stops 3 m too early, offset +3 m.')),
+          el('div.btns', el('button.btn', { onclick: () => setOff(off - step) }, '−'), el('b', off ? (off > 0 ? '+' : '−') + m(Math.abs(off)) : '0'), el('button.btn', { onclick: () => setOff(off + step) }, '+'))),
         el('div.row', el('div.lbl', el('b', 'The log'), el('small', s.n ? `${s.n} stop${s.n === 1 ? '' : 's'} passed, ${s.stopped} stopped, ${s.rolled} rolled through` +
-          (s.medianAt != null ? `; stops typically ${s.medianAt >= 0 ? m(s.medianAt) + ' before' : m(-s.medianAt) + ' past'} the map\'s stop point` : '') +
-          (s.overshot ? `; ${s.overshot} past it by over a metre` : '') : 'Nothing logged yet: drive past a mapped stop sign.')),
+          (s.medianAt != null ? `; stops typically ${rel(s.medianAt)} the map\'s stop point` : '') +
+          (s.overshot ? `; ${s.overshot} past it by over a metre` : '') +
+          (s.marks ? `. ${s.marks} mark${s.marks === 1 ? '' : 's'}: the real line is typically ${rel(s.medianMark)} the map's point` : '. Tap the stop alert when stopped at the real line to mark it') : 'Nothing logged yet: drive past a mapped stop sign.')),
           el('div.btns', el('button.btn', { onclick: copy, disabled: !s.n }, 'Copy'), el('button.btn.danger', { onclick: clear, disabled: !s.n }, 'Clear'))),
         ...rows));
   }

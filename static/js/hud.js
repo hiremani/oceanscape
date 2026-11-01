@@ -300,7 +300,10 @@ export class Hud {
     if (key === this.lastAlertKey) return;
     this.lastAlertKey = key;
     this.alerts.innerHTML = '';
-    for (const a of items.slice(0, 3)) this.alerts.append(el(`div.alert.${a.cls}`, el('b', a.t1 || ''), a.t2 ? el('span', a.t2) : null));
+    for (const a of items.slice(0, 3)) {
+      // the stop line's alert takes a tap: the driver marking the real stop line for the log (main.js markStop)
+      this.alerts.append(el(`div.alert.${a.cls}`, a.stop ? { onclick: () => this.app.markStop() } : null, el('b', a.t1 || ''), a.t2 ? el('span', a.t2) : null));
+    }
   }
 
   _roadinfo(f, unit) {

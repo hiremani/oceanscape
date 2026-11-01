@@ -1443,7 +1443,7 @@ export class CarScene {
     // the stop sign ahead that holds us and what a comfortable stop would take (stopplan.js), drawn on the road as a strip
     // from where the braking would start to the line. Advisory: the page shows it and logs it, nothing brakes
     const layer = this.mapFeatures.layer, showStop = showMap && s.stopPlan !== false;
-    const stop = showStop && layer ? nextStop(layer.features, this.pose) : null;
+    const stop = showStop && layer ? nextStop(layer.features, this.pose, undefined, Number(s.stopOffsetM) || 0) : null;
     if (stop) {
       const op = this.state && this.state.op;
       const v = op && op.carState ? op.carState.vEgo : f && f.vehicle && f.vehicle.speedKph != null ? f.vehicle.speedKph / 3.6 : 0;
