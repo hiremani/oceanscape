@@ -333,6 +333,27 @@ once. It needs a secure context, such as `localhost`; a plain `http://sunnypilot
 HTTP cache instead. The Android app serves everything from its own APK and doesn't use it. The
 day/night theme is applied from the saved setting before the first paint.
 
+## Layouts
+
+The HUD has three layouts (*Display → Layout*, `static/js/hudlayout.js`, `static/layout.css`). *Classic* is the floating
+status card, chips and cards over the 3D world. *Glance strip* moves the status card's own elements (`hud.js` keeps
+feeding them) into a 96 px strip across the top with the essential driving set (gear, speed, limit, set speed, gap,
+steering assist, telltales, the power bar, the chips), puts the next turn or the current alert (one at a time, the alert
+first) or the charge line in a band under it, and a 112 px bar of quick actions along the bottom (lock, driver seat heat,
+heated wheel, front defrost, the car controls, the camera angle, the comma camera, the comma, replay, settings). The
+actions go through `carcontrols.js` `set`, so they send what the catalog sends and refuse what it refuses. *Tile dash*
+keeps the 3D world in the top 40 % of the screen (the canvas is shrunk, so the head unit draws fewer pixels) over a grid
+of stat and action tiles on pages that follow the car (Drive, Assist, Charge, Park; a tapped page holds until the car's
+own page changes). The tiles read what the car already sends and nobody drew: range (`VCU_DrvgMilg`), trip
+(`VCU_0x5EA`), the odometer, the charge rate and time left, the car ahead from the world model; distances from the matrix
+are taken as kilometres until checked against the cluster (`hudlayout_logic.js`).
+
+Both layouts keep a driving flag on `<html data-driving>` (`hudlayout_logic.js` `drivingState`: NHTSA's line, the
+transmission not in Park; the speed decides when the gear is unknown; with no data at all the page is parked). While
+driving the music card collapses to a line, the 2D map to a pill, and the parked-only actions (the comma camera, the
+comma, replay) grey with "Parked only". Every card and button, in every layout, is glass: a translucent pane with a lit
+top edge, a shaded bottom edge and a soft drop (`layout.css`), which `perf.js` strips of its blur first under load.
+
 ## ADASBUS signals used
 
 Bus 2 (ADAS module) unless noted; the full set is in the *Signals* tab.

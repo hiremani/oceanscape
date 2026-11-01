@@ -5,6 +5,7 @@ import { $, $$, el, api, fmtBytes, fmtTime, prettyLabel, prettySignal, iconSvg }
 import { OCEAN_PAINTS, OCEAN_WHEELS, oceanPaint } from './models.js';
 import { RX_IDS } from './ibus_tables.js';
 import { CommaPanel } from './comma.js';
+import { LAYOUTS } from './hudlayout.js';
 
 // tab -> what it needs the comma for
 const OFFLINE_TABS = new Map([
@@ -300,6 +301,12 @@ export class Settings {
     const s = this.app.settings;
     const set = (k, v) => this.app.setSetting(k, v);
     const body = this.body;
+    body.append(el('div.section', el('h3', 'Layout'),
+      el('p.desc', 'Classic: the floating status card, chips and cards over the 3D world. Glance strip: speed, limit, set speed, assist and the ' +
+        'telltales in one strip across the top, the next turn or the current alert in a band under it, and a bar of quick actions along the ' +
+        'bottom; the music and the map shrink while the car is out of Park. Tile dash: the 3D world over a grid of tiles (range, power, ' +
+        'the car ahead, battery, trip) on pages that follow the car: Drive, Assist, Charge, Park.'),
+      this.app.segmented(LAYOUTS, s.layout || 'classic', v => set('layout', v))));
     body.append(el('div.section', el('h3', 'Theme'),
       this.app.segmented([['auto', 'Auto'], ['light', 'Day'], ['dark', 'Night']], s.theme, v => set('theme', v))));
     body.append(el('div.section', el('h3', 'Speed units'),
@@ -650,7 +657,7 @@ export class Settings {
   async renderAbout() {
     const body = this.body;
     // the app's version and its updates, as on the car controls' Software sheet (appupdate.js)
-    body.append(el('div.section', el('h3', 'OceanScape'), this.app.car.appUpdate.render(true)));
+    body.append(el('div.section', el('h3', 'Mrichchhakatikam'), this.app.car.appUpdate.render(true)));
     const src = { car: this.app.state && this.app.state.comma ? "The car's IBUS1/IBUS2, with the comma's ADAS bus, radar and openpilot" : "The car's IBUS1/IBUS2",
       comma: 'The comma alone (no car buses here)', replay: 'A drive the comma is replaying', none: 'Nothing yet: the car is asleep, or this isn\'t the car\'s screen' }[this.app.source];
     body.append(el('div.section', el('h3', 'Driving data'), el('div.kv', el('span', 'Source'), el('span', src))));

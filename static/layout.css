@@ -1,0 +1,165 @@
+/* The HUD's layouts (hudlayout.js): the Glance Strip and the Tile Dash, and the glass the HUD's cards and buttons
+   are made of in every layout: a translucent pane with a lit top edge, a shaded bottom edge and a soft drop, so the
+   controls stand off the 3D world instead of lying flat on it. Under load the blur goes first (perf.js: html.lowfx),
+   the gradients and the bevel stay. */
+
+:root {
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(246, 247, 250, 0.80) 100%);
+  --glass-bg-solid: linear-gradient(180deg, #ffffff 0%, #f1f3f6 100%);
+  --glass-bevel: inset 0 1px 0 rgba(255, 255, 255, 1), inset 0 -1px 0 rgba(20, 24, 31, 0.07), inset 1px 0 0 rgba(255, 255, 255, 0.55), inset -1px 0 0 rgba(20, 24, 31, 0.03);
+  --glass-drop: 0 10px 28px rgba(20, 24, 31, 0.13), 0 2px 5px rgba(20, 24, 31, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-press: inset 0 2px 8px rgba(20, 24, 31, 0.14), inset 0 1px 0 rgba(20, 24, 31, 0.06);
+  --glass-on: linear-gradient(180deg, rgba(62, 106, 225, 0.16) 0%, rgba(62, 106, 225, 0.08) 100%);
+  --heat: #e0452c;
+}
+:root[data-theme="dark"] {
+  --glass-bg: linear-gradient(180deg, rgba(44, 48, 56, 0.88) 0%, rgba(24, 27, 32, 0.82) 100%);
+  --glass-bg-solid: linear-gradient(180deg, #2a2e35 0%, #1b1e24 100%);
+  --glass-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(0, 0, 0, 0.55), inset 1px 0 0 rgba(255, 255, 255, 0.05), inset -1px 0 0 rgba(0, 0, 0, 0.25);
+  --glass-drop: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-press: inset 0 2px 8px rgba(0, 0, 0, 0.6);
+  --glass-on: linear-gradient(180deg, rgba(91, 134, 255, 0.28) 0%, rgba(91, 134, 255, 0.14) 100%);
+}
+
+/* ---------- the glass, in every layout ---------- */
+.card, .alert, .ri, .viewmenu, .chip, .viewdock > button.icon, .replaybar select {
+  background: var(--glass-bg); border: 1px solid var(--glass-border); box-shadow: var(--glass-bevel), var(--glass-drop);
+}
+.alert.userPrompt, .alert.critical, .alert.info, .chip.replay { border-color: transparent; box-shadow: var(--glass-drop), inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.18); }
+.alert.userPrompt { background: linear-gradient(180deg, #f5ad36, #e8961a); }
+.alert.critical { background: linear-gradient(180deg, #ea5a52, #d8352e); }
+.alert.info, .chip.replay { background: linear-gradient(180deg, #5b86ff, #3a64dc); }
+.viewdock > button.icon:active, .mc-btn:active, .econ-btn:active { box-shadow: var(--glass-press); transform: translateY(1px); }
+.viewdock > button.icon { color: var(--text); }
+html.lowfx .card, html.lowfx .alert, html.lowfx .ri, html.lowfx .viewmenu, html.lowfx .chip, html.lowfx .viewdock > button.icon { background: var(--glass-bg-solid); }
+
+/* ---------- shared by the Glance Strip and the Tile Dash ---------- */
+html[data-layout="classic"] .hl-strip, html[data-layout="classic"] .hl-band, html[data-layout="classic"] .hl-bar,
+html[data-layout="classic"] .hl-tiles, html[data-layout="classic"] .hl-pages, html:not([data-layout]) .hl-strip, html:not([data-layout]) .hl-band,
+html:not([data-layout]) .hl-bar, html:not([data-layout]) .hl-tiles, html:not([data-layout]) .hl-pages { display: none; }
+html[data-layout]:not([data-layout="classic"]) #drive { display: none; }
+html[data-layout]:not([data-layout="classic"]) .viewdock { display: none; }
+html[data-layout]:not([data-layout="classic"]) .fps { top: 104px; left: 12px; }
+html[data-layout]:not([data-layout="classic"]) .roadinfo { top: 104px; right: 12px; }
+html[data-layout]:not([data-layout="classic"]) .toast { bottom: 128px; }
+html[data-layout]:not([data-layout="classic"]) .replaybar { right: 12px; left: 12px; bottom: 124px; width: auto; }
+
+/* the strip: the essential driving set in one band at the top (Euro NCAP's line of sight), the status card's own
+   elements laid out in a row */
+.hl-strip { position: absolute; left: 0; right: 0; top: 0; height: 96px; z-index: 8; display: flex; align-items: center; gap: 18px; padding: 0 20px;
+  background: var(--glass-bg); border-bottom: 1px solid var(--glass-border); box-shadow: inset 0 -1px 0 rgba(20, 24, 31, 0.08), 0 6px 24px rgba(20, 24, 31, 0.10);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); }
+html.lowfx .hl-strip { background: var(--glass-bg-solid); }
+.hl-slot { display: flex; align-items: center; flex: none; }
+.hl-spacer { flex: 1; }
+.hl-strip .gear { font-size: 22px; gap: 9px; letter-spacing: 2px; }
+.hl-strip .blinkers { gap: 6px; margin: 0; }
+.hl-strip .blink { width: 22px; height: 18px; }
+.hl-strip .speed-row { flex-direction: row; align-items: baseline; gap: 8px; margin: 0; }
+.hl-strip .speed { font-size: 66px; line-height: 1; letter-spacing: -2px; min-width: 2ch; text-align: right; }
+.hl-strip .speed-unit { font-size: 14px; }
+.hl-strip .limit { min-width: 52px; }
+.hl-strip .limit.eu { width: 58px; height: 58px; border-width: 6px; font-size: 22px; }
+.hl-strip .limit.us b { font-size: 24px; }
+.hl-strip .setspeed { width: 58px; height: 58px; border-width: 3px; }
+.hl-strip .setspeed b { font-size: 21px; } .hl-strip .setspeed small { font-size: 9px; }
+.hl-strip .gap { width: 30px; }
+.hl-strip .assist-icon { width: 46px; height: 46px; padding: 8px; }
+.hl-strip .assist-text { margin: 0; min-height: 0; font-size: 20px; white-space: nowrap; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; }
+.hl-strip .telltales { gap: 10px; margin: 0; }
+.hl-strip .tt { width: 30px; height: 30px; }
+.hl-strip .econ { margin: 0; width: 150px; }
+.hl-strip .econ canvas, .hl-strip .econ-foot { display: none !important; }
+.hl-strip .chips { position: static; }
+.hl-strip .chip { font-size: 12px; padding: 7px 11px; }
+
+/* the band under the strip: the next turn or the current alert (one at a time, the alert first), or the charge line */
+.hl-band { position: absolute; left: 0; right: 0; top: 96px; z-index: 7; display: flex; flex-direction: column; pointer-events: none; }
+.hl-band .alerts, .hl-band .navcard { position: static; transform: none; width: auto; min-width: 0; max-width: none; border-radius: 0; margin: 0; }
+.hl-band .alerts { gap: 0; }
+.hl-band .alert { border-radius: 0; border-left: 0; border-right: 0; padding: 14px 24px; text-align: left; display: flex; align-items: baseline; gap: 14px; animation: none; }
+.hl-band .alert b { font-size: 26px; } .hl-band .alert span { font-size: 18px; margin: 0; }
+.hl-band .alert:not(:first-child) { display: none; }
+.hl-band:has(.alert) .navcard, .hl-band:has(.alert) .hl-charge { display: none; }
+.hl-band .navcard { border-left: 0; border-right: 0; padding: 10px 24px; pointer-events: none; }
+.hl-charge { display: flex; align-items: center; gap: 14px; padding: 14px 24px; font-size: 24px; font-weight: 500; background: var(--glass-bg); border-bottom: 1px solid var(--glass-border); box-shadow: 0 6px 20px rgba(20, 24, 31, 0.08); }
+.hl-charge i { display: inline-flex; width: 30px; height: 30px; color: var(--green); } .hl-charge i svg { width: 100%; height: 100%; }
+html.carmode .hl-band, html.carmode .hl-bar, html.carmode .hl-tiles, html.carmode .hl-pages { display: none; }
+html.carmode .hl-strip { z-index: 12; }
+
+/* the bar: a fixed row of quick actions at the thumb (Euro NCAP's "direct touch input"), each at least 10 mm */
+.hl-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 112px; z-index: 9; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none;
+  padding-bottom: env(safe-area-inset-bottom); background: var(--glass-bg); border-top: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 -6px 24px rgba(20, 24, 31, 0.10); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); }
+html.lowfx .hl-bar { background: var(--glass-bg-solid); }
+.hl-btn { position: relative; flex: 1 1 96px; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 6px; margin: 8px 0 8px 8px; border: 1px solid var(--glass-border); border-radius: 16px;
+  background: var(--glass-bg); box-shadow: var(--glass-bevel), 0 3px 10px rgba(20, 24, 31, 0.08); color: var(--text); font: 500 12px/1 var(--font); letter-spacing: .03em; text-transform: uppercase; }
+.hl-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-btn:last-child { margin-right: 8px; }
+.hl-btn i { display: inline-flex; width: 34px; height: 34px; color: var(--text); } .hl-btn i svg { width: 100%; height: 100%; }
+.hl-btn small { font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--muted); min-height: 11px; }
+.hl-btn:active { box-shadow: var(--glass-press); transform: translateY(1px); }
+.hl-btn.on { background: var(--glass-on); color: var(--accent); border-color: rgba(62, 106, 225, 0.35); } .hl-btn.on i { color: var(--accent); }
+.hl-btn.heat { color: var(--heat); } .hl-btn.heat i { color: var(--heat); }
+.hl-btn.off { color: var(--faint); } .hl-btn.off i { color: var(--faint); } .hl-btn.off small { color: var(--faint); }
+.hl-viewslot { position: absolute; bottom: 100%; right: 0; margin-bottom: 10px; }
+.hl-viewslot .viewmenu { position: static; min-width: 180px; }
+.hl-viewslot .viewmenu button { height: 52px; font-size: 18px; }
+
+/* ---------- Glance Strip ---------- */
+html[data-layout="glance"] .musiccard { left: 0; right: 0; bottom: 112px; width: auto; border-radius: 0; border-left: 0; border-right: 0; box-shadow: 0 -4px 16px rgba(20, 24, 31, 0.06); z-index: 6; }
+html[data-layout="glance"][data-driving="true"] .musiccard { grid-template-columns: minmax(0, 1fr) auto; padding: 4px 12px 4px 24px; gap: 0 14px; }
+html[data-layout="glance"][data-driving="true"] .musiccard .mc-art, html[data-layout="glance"][data-driving="true"] .musiccard .mc-time { display: none; }
+html[data-layout="glance"][data-driving="true"] .mc-meta { flex-direction: row; align-items: baseline; gap: 10px; }
+html[data-layout="glance"][data-driving="true"] .mc-meta b { font-size: 20px; } html[data-layout="glance"][data-driving="true"] .mc-meta span { font-size: 18px; }
+html[data-layout="glance"][data-driving="true"] .mc-meta small { display: none; }
+html[data-layout="glance"] .mc-btn { width: 56px; height: 56px; } html[data-layout="glance"] .mc-btn svg { width: 28px; height: 28px; }
+html[data-layout="glance"] .mapcard { top: auto; right: 16px; bottom: calc(112px + var(--hl-music-h, 0px) + 16px); width: 320px; }
+html[data-layout="glance"][data-driving="true"] .mapcard { width: 130px; border-radius: 14px; }
+html[data-layout="glance"][data-driving="true"] .mapcard .mm-road { display: none; }
+html[data-layout="glance"] .roadname { bottom: calc(112px + 80px + 16px); left: 16px; transform: none; }
+html[data-layout="glance"][data-driving="false"] .roadname { bottom: calc(112px + 150px + 16px); }
+html[data-layout="glance"] #app:has(.musiccard:not(.hidden)) { --hl-music-h: 64px; }
+html[data-layout="glance"][data-driving="false"] #app:has(.musiccard:not(.hidden)) { --hl-music-h: 112px; }
+
+/* ---------- Tile Dash ---------- */
+html[data-layout="tiles"]:not(.carmode) #scene { height: 40%; }
+html[data-layout="tiles"] .hl-tiles { position: absolute; left: 0; right: 0; top: calc(40% + 8px); bottom: calc(112px + 52px); z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 8px; padding: 0 12px; overflow: hidden; }
+.hl-tile { display: flex; flex-direction: column; justify-content: space-between; padding: 16px 20px; min-height: 0; border: 1px solid var(--glass-border); border-radius: 18px;
+  background: var(--glass-bg); box-shadow: var(--glass-bevel), var(--glass-drop); color: var(--text); text-align: left; }
+.hl-tile .l { font: 500 15px/1 var(--font); color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+.hl-tile .v { font: 300 clamp(28px, 4.2vh, 56px)/1 var(--font); letter-spacing: -.02em; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; min-height: 0; overflow: hidden; }
+.hl-tile .v small { font-size: 45%; color: var(--muted); letter-spacing: 0; }
+.hl-tile .s { font: 400 16px/1.25 var(--font); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-tile.dim { color: var(--faint); } .hl-tile.dim .v, .hl-tile.dim .l, .hl-tile.dim .s { color: var(--faint); }
+.hl-tile.action { flex-direction: row; align-items: center; gap: 16px; padding: 12px 20px; }
+.hl-tile.action i { display: inline-flex; width: 40px; height: 40px; flex: none; color: var(--text); } .hl-tile.action i svg { width: 100%; height: 100%; }
+.hl-tile.action .v { font: 500 24px/1.2 var(--font); letter-spacing: 0; }
+.hl-tile.action:active { box-shadow: var(--glass-press); transform: translateY(1px); }
+.hl-tile.action.on { background: var(--glass-on); border-color: rgba(62, 106, 225, 0.35); } .hl-tile.action.on i { color: var(--accent); }
+.hl-tile.action.heat i { color: var(--heat); }
+html[data-layout="tiles"] .hl-pages { position: absolute; left: 0; right: 0; bottom: 112px; height: 52px; z-index: 6; display: flex; justify-content: center; align-items: center; gap: 8px; }
+.hl-page { border: 0; background: transparent; color: var(--muted); font: 500 17px/1 var(--font); padding: 10px 14px; border-radius: 12px; }
+.hl-page::before { content: "○ "; color: var(--faint); }
+.hl-page.on { color: var(--accent); } .hl-page.on::before { content: "● "; color: var(--accent); }
+html[data-layout="tiles"] .musiccard { display: none; left: 12px; right: 12px; bottom: calc(112px + 52px + 8px); width: auto; z-index: 7; }
+html[data-layout="tiles"][data-hlmusic="on"] .musiccard { display: grid; }
+html[data-layout="tiles"] .mapcard { display: none; top: auto; right: 12px; bottom: calc(112px + 52px + 8px); width: 320px; z-index: 7; }
+html[data-layout="tiles"][data-hlmap="on"] .mapcard { display: block; }
+html[data-layout="tiles"] .roadname { top: calc(40% - 44px); bottom: auto; }
+html[data-layout="tiles"] .roadinfo { top: auto; bottom: calc(60% + 8px); }
+html[data-layout="tiles"].carmode .hl-strip { z-index: 12; }
+
+/* ---------- small screens: the strip and bar keep their shape, the dash goes to two columns ---------- */
+@media (max-width: 640px) {
+  .hl-strip { gap: 10px; padding: 0 10px; }
+  .hl-strip .speed { font-size: 48px; }
+  .hl-strip .assist-text, .hl-strip .econ { display: none; }
+  .hl-btn { flex-basis: 76px; font-size: 11px; } .hl-btn i { width: 28px; height: 28px; }
+  html[data-layout="tiles"] .hl-tiles { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* no driving data (the plain browser, the car asleep): the strip's read-outs are blank, as the classic card is hidden */
+html.offline .hl-strip > .hl-slot:not([data-for="chips"]) { visibility: hidden; }
