@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><title>harness</title>
+<style>html,body{margin:0;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}</style></head>
+<body>
+<!-- The driver page: writes the settings the test wants, loads the app in an iframe, feeds it synthetic CAN frames
+     and shows a debug line. Query parameters:
+       layout=classic|glance|tiles   theme=light|dark   drive=1 (D at 68 km/h, else P standing)   kph=<n>
+       data=0 (no frames: the page's "offline" look)   wait=<ms> (default 14000: how long the load event waits)
+       dbg=0 (hide the debug line, for a clean screenshot)   set=<json> (merged into webhud.settings last) -->
+<div id="dbg" style="position:fixed;left:0;top:0;z-index:99;background:#ff0;color:#000;font:14px monospace;padding:4px;white-space:pre"></div>
+<iframe id="f"></iframe>
+<script type="module">
+import { packFrame } from '/js/carstate.js';
+const q = new URLSearchParams(location.search);
+const wait = q.get('wait') || '14000';
+const img = document.createElement('img');
+img.src = '/slow?ms=' + wait; img.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0';
+document.body.append(img);   // keeps the load event (and Chrome's screenshot) waiting that long
+if (q.get('dbg') === '0') document.getElementById('dbg').style.display = 'none';
+
+const s = JSON.parse(localStorage.getItem('webhud.settings') || '{}');
+Object.assign(s, { layout: q.get('layout') || 'classic', theme: q.get('theme') || 'light', demoCarState: true, demoInfotainment: true, showFps: false, version: 3 });
+try { Object.assign(s, JSON.parse(q.get('set') || '{}')); } catch (e) { /* bad json: ignored */ }
+localStorage.setItem('webhud.settings', JSON.stringify(s));
+
+const f = document.getElementById('f');
+f.src = '/';
+f.addEventListener('load', () => {
+  const w = f.contentWindow;
+  const drive = q.get('drive') === '1';
+  const kph = Number(q.get('kph') || (drive ? 68 : 0));
+  const gear = drive ? 4 : 1;   // VCU_GearSig: 1 = P, 4 = D
+  // packFrame returns {bus, addr, data}: the same objects CanBridge.kt delivers in a webhud:can event's detail.
+  const frames = [
+    packFrame('IBUS1', 0x234, { VCU_GearSig: gear, VCU_GearSigVld: 1, VCU_RdyLamp: 1 }),
+    packFrame('IBUS1', 0x318, { ESP_VehSpd: Math.round(kph * 10), ESP_VehSpdVld: 1 }),
+    packFrame('IBUS1', 0x112, { YRS_YawRate: 18000, YRS_YawRateSnsrSts: 1 }),
+  ];
+  setInterval(() => {
+    try {
+      const a = w.webhud, st = a && a.state, fv = st && st.fisker && st.fisker.vehicle, h = w.document.documentElement;
+      document.getElementById('dbg').textContent = `src=${a && a.source} driving=${h.dataset.driving} layout=${h.dataset.layout} cls=${h.className} worker=${a && a.workerReady} gear=${fv && fv.gear} kph=${fv && fv.speedKph} localAge=${a && Math.round(performance.now() - a.lastLocalAt)} errs=${a && a.errors ? [...a.errors].join(' | ').slice(0, 300) : ''}`;
+    } catch (e) { document.getElementById('dbg').textContent = 'dbg ' + e; }
+  }, 500);
+  if (q.get('data') !== '0') setInterval(() => w.dispatchEvent(new w.CustomEvent('webhud:can', { detail: frames })), 100);
+});
+</script></body></html>
