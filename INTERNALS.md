@@ -333,6 +333,31 @@ once. It needs a secure context, such as `localhost`; a plain `http://sunnypilot
 HTTP cache instead. The Android app serves everything from its own APK and doesn't use it. The
 day/night theme is applied from the saved setting before the first paint.
 
+## Stop signs
+
+The stop sign ahead that holds us comes from the roads layer's features (`stopplan.js nextStop`): the nearest
+`stop` arm facing within 35° of our heading, on our road (within its half width plus 2 m), up to 200 m ahead,
+its line at the crossing road's edge less 1 m as `mapfeatures.js` draws it. `plan(along, v, a)` is what a
+comfortable stop would take: the braking distance is v²/2a plus 0.6 s of travel for the ramp, the target speed
+inside it √(2a·s) to a point 1 m before the line, and the deceleration `a` follows the ACC time gap
+(`decelFor`: 2.5, 2.0, 1.5, 1.2 m/s² for gaps 1 to 4, 1.8 without one), the same comfort knob the driver sets for
+following. A fixed start distance is wrong: at 25 mph a 1.5 m/s² stop needs 42 m, and stopping from 25 ft would
+take 8 m/s².
+
+The scene draws the plan as a strip in our lane from where the braking would start to the line (`stopmark.js`,
+in the map's ground-fixed group: blue ahead, amber inside the braking distance, red at the stop point); the
+alerts get a line with the distance and the target speed (`stopLine`), which the Glance strip shows in its band.
+Nothing commands the car: the page cannot, and a stop assist belongs in the comma's longitudinal planner, after
+openpilot's longitudinal control on the Fisker port is enabled and tuned.
+
+`StopLog` (`main.js _stopLog`, `webhud.stoplog` in local storage, 300 records) keeps one record per stop sign
+passed: whether the car came to rest (under 0.3 m/s), where its slowest point was in metres before the stop
+point (`atM`, negative past it), the lowest speed, the gap, and how far away the sign was first seen. A match
+lost for under 3 s does not end a stop; a sign never approached within 15 m is not a pass. Settings > Driving
+shows the summary (passes, stops, the median stop point, overshoots), the last eight, and copies the records
+as JSON. Its purpose is to measure how far the map's stop lines can be trusted on the roads driven, before
+anything brakes for them.
+
 ## Layouts
 
 The HUD has three layouts (*Display → Layout*, `static/js/hudlayout.js`, `static/layout.css`). *Classic* is the floating

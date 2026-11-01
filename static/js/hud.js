@@ -1,5 +1,6 @@
 import { cameraSignUnit, cameraSignValue, signStyle } from './regional.js';
 // DOM overlay: speed, gear, steering assist (MADS), ACC set speed + gap, speed limit, telltales, alerts.
+import { stopLine } from './stopplan.js';
 import { $, $$, el, icon, iconSvg, setClass, setText, prettyLabel, MS_TO_KPH, MS_TO_MPH } from './util.js';
 import { EnergyDetails } from './energy.js';
 
@@ -290,6 +291,9 @@ export class Hud {
       if (w.text && w.text.v) items.push({ cls: 'userPrompt', t1: prettyLabel(w.text.n), t2: 'Fisker ADAS' });
       if (w.highPriority && w.highPriority.v) items.push({ cls: 'userPrompt', t1: prettyLabel(w.highPriority.n), t2: '' });
     }
+    // the stop sign ahead and the advisory slow-down (scene.js ourStop, stopplan.js): a line while it is ours
+    const stop = this.app.scene && this.app.scene.ourStop;
+    if (stop) { const l = stopLine(stop, stop.plan, stop.v, this.unitFor(this.app.settings, f)); if (l) items.push(l); }
     const notice = state.server && state.server.notice;
     if (notice) items.push({ cls: 'info', t1: notice, t2: '' });
     const key = JSON.stringify(items);

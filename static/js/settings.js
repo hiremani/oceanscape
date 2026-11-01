@@ -215,8 +215,37 @@ export class Settings {
 
   // ---- driving params ----------------------------------------------------------------------------
 
+  /** Stop signs: the advisory plan on/off and the log of where the car stopped against the map (stopplan.js). */
+  stopSection() {
+    const app = this.app, log = app.stopLog, s = log.summary();
+    const unit = app.hud.unitFor(app.settings, app.liveState() && app.liveState().fisker);
+    const m = (v) => unit === 'mph' ? `${Math.round(v * 3.28084)} ft` : `${v.toFixed(1)} m`;
+    const when = (t) => new Date(t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const rows = log.records.slice(-8).reverse().map(r => el('div.row',
+      el('div.lbl', el('b', `${r.all ? 'All-way stop' : 'Stop'} · ${when(r.t)}`),
+        el('small', r.stopped ? `Stopped ${r.atM >= 0 ? m(r.atM) + ' before' : m(-r.atM) + ' past'} the stop point` : `Rolled through at ${unit === 'mph' ? Math.round(r.minKph / 1.609) + ' mph' : r.minKph + ' km/h'}`))));
+    const copy = async () => {
+      try { await navigator.clipboard.writeText(JSON.stringify(log.records)); app.toast('Copied the stop log'); } catch (e) { app.toast('Copy failed: ' + e.message); }
+    };
+    const clear = () => { if (!confirm('Clear the stop log?')) return; log.records = []; log.changed = true; app._stopLog(); this.renderDrivingSoon(); };
+    return el('div.section',
+      el('h3', 'Stop signs'),
+      el('p.desc', 'The map\'s stop sign ahead and the slow-down a comfortable stop would take, on the road and in the alerts. ' +
+        'Advisory only: the car does not brake for it. The braking distance follows the speed and the ACC time gap (a short gap brakes late and firm). ' +
+        'Every stop passed is logged with where the car really stopped, to judge the map before any stop assist exists.'),
+      el('div.rows',
+        el('div.row', el('div.lbl', el('b', 'Show the stop plan'), el('small', 'The strip on the road and the line in the alerts.')),
+          app.switch(app.settings.stopPlan !== false, v => app.setSetting('stopPlan', v))),
+        el('div.row', el('div.lbl', el('b', 'The log'), el('small', s.n ? `${s.n} stop${s.n === 1 ? '' : 's'} passed, ${s.stopped} stopped, ${s.rolled} rolled through` +
+          (s.medianAt != null ? `; stops typically ${s.medianAt >= 0 ? m(s.medianAt) + ' before' : m(-s.medianAt) + ' past'} the map\'s stop point` : '') +
+          (s.overshot ? `; ${s.overshot} past it by over a metre` : '') : 'Nothing logged yet: drive past a mapped stop sign.')),
+          el('div.btns', el('button.btn', { onclick: copy, disabled: !s.n }, 'Copy'), el('button.btn.danger', { onclick: clear, disabled: !s.n }, 'Clear'))),
+        ...rows));
+  }
+
   async renderDriving() {
     const body = this.body;
+    body.append(this.stopSection());
     let p;
     try { p = await api('/api/params'); } catch (e) { body.append(el('div.banner.bad', e.message)); return; }
     if (this.tab !== 'driving') return;

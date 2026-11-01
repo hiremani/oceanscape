@@ -17,6 +17,8 @@ import { NavArrow } from './navarrow.js';
 import { mapReference, mapRoadFrame, mapAlignMatrix, freshPlacement, mapDisagrees, lineAlong, junctions, cutByStations } from './mapsurface.js';
 import { RoadNetwork } from './roadnet.js';
 import { MapFeatures } from './mapfeatures.js';
+import { StopMark } from './stopmark.js';
+import { nextStop, plan as stopPlan, decelFor } from './stopplan.js';
 import { STEER_RATIO } from './vehicle.js';
 import { centerFromFace, glide, poseBefore } from './objplace.js';
 
@@ -342,6 +344,8 @@ export class CarScene {
     this.mapRef = null;              // this frame's map reference (mapsurface.js), null in camera mode
     this.mapFrame = null;            // ...and the road frame furniture anchors to on it
     this.ourSignal = null;           // the map's signal ahead on our road, if one (mapfeatures.js)
+    this.stopMark = new StopMark(this.mapGroup);
+    this.ourStop = null;             // the stop sign ahead that holds us, with the advisory slow-down plan (stopplan.js)
 
     this.headBeam = lightPool(0xfff1cf, beamTex());
     this.field.mask(this.headBeam.material, 'ground');
@@ -1415,6 +1419,7 @@ export class CarScene {
       this.mapGroup.matrix.identity(); this.mapGroup.matrixWorldNeedsUpdate = true;
       this.roadnet.clear();
       this.mapFeatures.clear();
+      this.stopMark.clear();
     }
     const zr = this.ego.userData.rearAxleZ ?? REAR_AXLE_Z;
     // the placement keeps running while the map has given way to the cameras, which is how it finds they agree again
@@ -1435,6 +1440,17 @@ export class CarScene {
     this.roadnet.update(map, showMap, leftTraffic(s, f0), signStyle(s, unit0, f0) === 'us');
     const f = this.state && this.state.fisker;
     this.ourSignal = this.mapFeatures.update(map, showMap && s.showSigns !== false, f ? f.tlr : null, this.pose, this.clock);
+    // the stop sign ahead that holds us and what a comfortable stop would take (stopplan.js), drawn on the road as a strip
+    // from where the braking would start to the line. Advisory: the page shows it and logs it, nothing brakes
+    const layer = this.mapFeatures.layer, showStop = showMap && s.stopPlan !== false;
+    const stop = showStop && layer ? nextStop(layer.features, this.pose) : null;
+    if (stop) {
+      const op = this.state && this.state.op;
+      const v = op && op.carState ? op.carState.vEgo : f && f.vehicle && f.vehicle.speedKph != null ? f.vehicle.speedKph / 3.6 : 0;
+      const gap = f && f.acc && f.acc.timeGap;
+      this.ourStop = { ...stop, v, gap, plan: stopPlan(stop.along, v, decelFor(gap)) };
+    } else this.ourStop = null;
+    this.stopMark.update(stop, this.ourStop && this.ourStop.plan, showStop);
   }
 
   /** Give the map's ground-fixed layers the reference's rigid placement (mapsurface.js mapAlignMatrix). Without a

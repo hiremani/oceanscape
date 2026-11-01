@@ -15,6 +15,7 @@ import { Settings } from './settings.js';
 import { VehicleState } from './vehicle.js';
 import { RoadCam } from './roadcam.js';
 import { HudLayout } from './hudlayout.js';
+import { StopLog } from './stopplan.js';
 
 const SETTINGS_VERSION = 3;
 const AUTO_VIEW_HOLD_MS = 10000;   // a parking maneuver starting this soon after the user picked a view keeps it
@@ -28,7 +29,7 @@ const DEFAULTS = {
   showTracks: true, showRadar: true, radarAllTracks: false, showLowConf: false, showObjectStats: false, objectMode: 'world',
   laneHeadingSign: 1, laneCurvatureSign: 1, objectHeadingSign: 1, laneConfThreshold: LANE_CONF_THRESHOLD,
   showFps: true, renderScale: 'auto', showMusic: true, showNav: true, miniMap: true, demoInfotainment: false, demoCarState: false, carDemo: false,
-  calibration: true, mapPrefetchKm: 25, positionSource: 'car', roadcam: 'mirror', layout: 'classic',
+  calibration: true, mapPrefetchKm: 25, positionSource: 'car', roadcam: 'mirror', layout: 'classic', stopPlan: true,
 };
 
 function loadSettings() {
@@ -107,6 +108,7 @@ class App {
     this.carState = new CarState(this);
     this.cmd = new CarCommands(this);   // sending to the car, through the app
     this.hudLayout = new HudLayout(this);   // the HUD's layouts: the classic cards, the Glance Strip, the Tile Dash (hudlayout.js)
+    this.stopLog = new StopLog(store('stoplog', []));   // where the car stopped against the map's stop signs (stopplan.js)
     // every frame the app reads on the car's buses also goes to the worker, which keeps the car's own view of the world
     window.addEventListener('webhud:can', (e) => { if (this.worker && Array.isArray(e.detail)) this.worker.postMessage({ type: 'ibus', t: Date.now() / 1000, frames: e.detail }); });
     // the screen's own location, while the position source is 'device' (the app only sends it then)
@@ -132,11 +134,19 @@ class App {
       try { this.miniMap.update(state, settings, now); } catch (e) { this.reportError(e); }
       try { this.info.frame(dt); } catch (e) { this.reportError(e); }
       try { this.hudLayout.frame(state, settings, now); } catch (e) { this.reportError(e); }
+      try { if (!mock) this._stopLog(); } catch (e) { this.reportError(e); }
       try { this.carState.frame(); } catch (e) { this.reportError(e); }
       this.meter.tick(now, dt * 1000, performance.now() - t0);
     };
     requestAnimationFrame(loop);
     setInterval(() => this.watchdog(), 1000);
+  }
+
+  /** One observation of the stop ahead for the log, and the log saved when a stop was passed. */
+  _stopLog() {
+    const st = this.scene.ourStop;
+    this.stopLog.observe(st, st ? st.v : 0, Date.now() / 1000, st ? st.gap : undefined);
+    if (this.stopLog.changed) { this.stopLog.changed = false; save('stoplog', this.stopLog.records); }
   }
 
   reportError(e) {
