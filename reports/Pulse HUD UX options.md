@@ -85,7 +85,7 @@ Every existing function stays one or two steps away: settings via the gear in th
 
 ### Option B: Tile Dash (S3XY-style widget dashboard)
 
-The Tile Dash gives the 3D view the top 40 % of the portrait screen under the same strip and fills the rest with a three-column grid of stat and action tiles on pages that switch by state, as the S3XY Dash does on Drive, Autopilot and charging ([enhauto tutorial](https://www.enhauto.com/blogs/all/s3xy-dash-tutorial-instrument-cluster-tesla)). The Drive page shows range, power/regen, lead distance and time, state of charge, outside temperature and trip; the Assist page (comma engaged, or Fisker ACC active) swaps in set speed, gap, MADS state, lane confidence and the speed-limit-ahead from mapd; the Charge page (parked and plugged) shows kW, time left, port state, pack current and voltage, 12 V (once received) and the energy shares that today live in the Energy dialog; the Park page shows doors, windows, lock, tyre lamps and the comma. Action tiles (seat heat, defrost, lock, heated wheel, fold mirrors) show their state on the tile and send through the same catalog entries.
+The Tile Dash gives the 3D view the majority of the portrait screen — about 58 % — under the same strip, and fills the rest with a compact three-column grid of stat and action tiles on pages that switch by state, as the S3XY Dash does on Drive, Autopilot and charging ([enhauto tutorial](https://www.enhauto.com/blogs/all/s3xy-dash-tutorial-instrument-cluster-tesla)). The Drive page is deliberately kept to **three stat tiles** — range, power/regen and lead — plus the three action tiles, so the car and animation keep the screen and the glance count stays low; the fuller grids (state of charge, outside temperature, trip, and the rest) move to the parked Charge and Park pages and to the Assist page, which (comma engaged, or Fisker ACC active) swaps in set speed, gap, MADS state, lane confidence and the speed-limit-ahead from mapd; the Charge page (parked and plugged) shows kW, time left, port state, pack current and voltage, 12 V (once received) and the energy shares that today live in the Energy dialog; the Park page shows doors, windows, lock, tyre lamps and the comma. Action tiles (seat heat, defrost, lock, heated wheel, fold mirrors) show their state on the tile and send through the same catalog entries.
 
 ```
 PORTRAIT, Drive page (driving)                          LANDSCAPE, Charge page (parked)
@@ -93,15 +93,12 @@ PORTRAIT, Drive page (driving)                          LANDSCAPE, Charge page (
 | 42 mph [50] ACC 45 ||| MADS beam D  !    |  strip    | 0 mph  P   Plugged in . 7.4 kW . 1h40 left                        |
 +------------------------------------------+           +----------------------+----------+----------+----------+----------+
 |                                          |           |                      | SoC 61 % | Pack     | 12 V     | Cell T   |
-|          3D world view (40 %)            |           |   3D car, port open  | 187 mi   | 398 V 19A| 12.6 V   | 21-24 C  |
+|         3D world view (~58 %)            |           |   3D car, port open  | 187 mi   | 398 V 19A| 12.6 V   | 21-24 C  |
 |                                          |           |                      +----------+----------+----------+----------+
 +------------+------------+----------------+           |                      | Energy shares 10 min graph (Energy dlg) |
 | Range      | Power      | Lead           |  1x1      |                      +---------------------------------------+
-| 187 mi     | < 12 kW    | 34 m . 1.8 s   |  tiles    |                      | [Limit 80 %: owned] [Stop: owned] [Comma]|
+| 187 mi     | < 12 kW    | 34 m . 1.8 s   |  3 stat   |                      | [Limit 80 %: owned] [Stop: owned] [Comma]|
 +------------+------------+----------------+           +----------------------+---------------------------------------+
-| SoC 61 %   | Outside    | Trip           |
-| ########.. | 54 F       | 23.4 mi 3.1    |
-+------------+------------+----------------+
 | [SEAT HEAT]| [DEFROST]  | [LOCK  open]   |  actions
 +------------+------------+----------------+
 |  * Drive    o Assist    o Charge  o Park |  pages (auto by state, swipe or tap)
@@ -110,7 +107,7 @@ PORTRAIT, Drive page (driving)                          LANDSCAPE, Charge page (
 +------------------------------------------+
 ```
 
-Functions are reached by page rather than by sheet: the Energy dialog becomes the Charge page, car controls stay behind Car or a tap on the small scene, settings behind the gear, the comma behind its tile. The guideline trade-off is double-edged. Tiles make every target large (360 × 300 frame px, about 70 × 60 mm) and every action one step, and a smaller canvas lightens the GPU on the head unit whose 815k-triangle model is a known worry ([CAR_CONTROLS_PLAN.md](../CAR_CONTROLS_PLAN.md#L137-L144)). But nine numbers on a driving page invite nine glances, and the research warns that more simultaneously active elements measurably raise load; NHTSA's 12 s task budget is about tasks, not about reading a dashboard, so the risk here is the long distraction (a 3-4 s stare) rather than a failed task test ([Ergosign STADT:up](https://www.ergosign.de/en/insights/blog/stadt-up-abschluss)). The right use of this option is the parked and charging pages and the Assist page, with the Drive page capped at three tiles; a user-arranged grid with persistence in `localStorage` already has a settings store to live in ([main.js](../static/js/main.js#L18-L31)).
+Functions are reached by page rather than by sheet: the Energy dialog becomes the Charge page, car controls stay behind Car or a tap on the small scene, settings behind the gear, the comma behind its tile. The guideline trade-off is double-edged. Tiles make every target large (360 × 300 frame px, about 70 × 60 mm) and every action one step ([CAR_CONTROLS_PLAN.md](../CAR_CONTROLS_PLAN.md#L137-L144)). A grid packed with numbers would invite a glance per number, and the research warns that more simultaneously active elements measurably raise load; NHTSA's 12 s task budget is about tasks, not about reading a dashboard, so the risk is the long distraction (a 3-4 s stare) rather than a failed task test ([Ergosign STADT:up](https://www.ergosign.de/en/insights/blog/stadt-up-abschluss)). That is why the Drive page here is held to three stat tiles with the 3D world kept large (about 58 % of the screen), and the fuller grids move to the parked Charge and Park pages and the Assist page; a user-arranged grid with persistence in `localStorage` already has a settings store to live in ([main.js](../static/js/main.js#L18-L31)). The one cost of the larger canvas is that the GPU carries more of the 815k-triangle model, which is an argument for the model-compression work rather than against the layout.
 
 ### Option C: Map Centre (map-centred layout)
 

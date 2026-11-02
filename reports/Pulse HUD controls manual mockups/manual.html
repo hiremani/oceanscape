@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fisker Ocean HUD — Car Controls Manual</title>
+<style>
+  @page { size: Letter; margin: 16mm 15mm 14mm; }
+  :root {
+    --ink:#1b1d21; --muted:#6b7076; --line:#e4e6ea; --bg:#eef0f3; --card:#fff;
+    --blue:#2f6bff; --bluebg:#e8efff; --amber:#c07a12;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body { font:15px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); margin:0; }
+  h1 { font-size:30px; letter-spacing:-.01em; margin:0 0 6px; }
+  h2 { font-size:21px; margin:0 0 10px; letter-spacing:-.01em; }
+  h3 { font-size:17px; margin:0 0 4px; }
+  p { margin:0 0 9px; }
+  .muted { color:var(--muted); }
+  code { background:var(--bg); border-radius:5px; padding:1px 5px; font:12.5px/1 ui-monospace,Menlo,Consolas,monospace; }
+
+  /* cover */
+  .cover { height:247mm; display:flex; flex-direction:column; page-break-after:always; }
+  .cover .top { flex:1; }
+  .kicker { color:var(--blue); font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:12px; margin-bottom:18px; }
+  .cover p.lede { font-size:16px; max-width:150mm; color:#3a3d42; }
+  .thumbs { display:flex; gap:7mm; margin-top:10mm; }
+  .thumbs img { width:48mm; border-radius:10px; border:1px solid var(--line); box-shadow:0 2px 10px rgba(0,0,0,.07); }
+  .meta { border-top:1px solid var(--line); padding-top:8px; color:var(--muted); font-size:12.5px; display:flex; gap:18px; flex-wrap:wrap; }
+
+  section { page-break-inside:avoid; margin-bottom:11mm; }
+  h2.sec { page-break-before:always; padding-top:1mm; }
+
+  /* tag chips in prose */
+  .tag { display:inline-block; border-radius:999px; padding:1px 9px; font-size:12px; font-weight:600; border:1px solid; vertical-align:1px; white-space:nowrap; }
+  .t-send { color:var(--blue); border-color:#bcd0ff; background:var(--bluebg); }
+  .t-read { color:var(--muted); border-color:var(--line); background:#f6f7f8; }
+  .t-comma{ color:#6a4ea8; border-color:#d8ccf0; background:#f1ecfb; }
+  .t-na   { color:var(--muted); border-color:var(--line); background:#f6f7f8; }
+
+  table { width:100%; border-collapse:collapse; margin:4px 0 2px; table-layout:fixed; }
+  th,td { text-align:left; vertical-align:top; padding:6px 8px; border-bottom:1px solid var(--line); font-size:13px; overflow-wrap:anywhere; }
+  th { color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; }
+
+  /* category block: figure beside text */
+  .cat { display:flex; gap:7mm; page-break-inside:avoid; margin-bottom:9mm; align-items:flex-start; }
+  .cat .fig { flex:0 0 56mm; }
+  .cat .fig img { width:56mm; border-radius:10px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .cat .fig .cap { font-size:11px; color:var(--muted); margin-top:4px; text-align:center; }
+  .cat .body { flex:1; }
+  .pill { display:inline-block; width:12px; height:12px; border-radius:4px; vertical-align:-1px; margin-right:4px; }
+  .note { background:#fbfbe9; border:1px solid #ece7b8; border-radius:10px; padding:10px 13px; font-size:13px; color:#5c5422; }
+  .warn { background:#fdf0f0; border:1px solid #f2cfcf; border-radius:10px; padding:10px 13px; font-size:13px; color:#7a2d2d; }
+  ul.tight { margin:4px 0 0; padding-left:18px; }
+  ul.tight li { margin:2px 0; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="top">
+    <div class="kicker">Fisker Ocean · Pulse HUD</div>
+    <h1>Car Controls Manual</h1>
+    <p class="lede">What you can control from the center screen, where each control lives, and how to read whether a
+    control changes the car or only shows its state. Includes the two parked trials that unlock the greyed controls.</p>
+    <div class="thumbs">
+      <img src="01-dock.png" alt="controls dock">
+      <img src="06-assist.png" alt="assist">
+      <img src="08-doors.png" alt="doors">
+    </div>
+  </div>
+  <div class="meta">
+    <span><b>App</b> Mrichchhakatikam (OceanScape fork)</span>
+    <span><b>Date</b> 2 Nov 2026</span>
+    <span><b>Branch</b> pulse-coexist</span>
+    <span><b>Screens</b> demo state (no live car), captured at Pulse size 1080×1784</span>
+  </div>
+</div>
+
+<!-- OPENING THE CONTROLS -->
+<h2 class="sec">1 · Opening the controls</h2>
+<div class="cat">
+  <div class="fig">
+    <img src="01-dock.png" alt="dock">
+    <div class="cap">Tap the car → the dock rises; badges mark each zone.</div>
+  </div>
+  <div class="body">
+    <p><b>Tap the car</b> in the 3D view. The camera lifts to a top-down view, the roof fades so the cabin shows, and a
+    <b>dock of categories</b> rises along the bottom. A glowing badge sits on the car over the part each category is
+    about (the headlight, a vent, a seat, the charge port, a window).</p>
+    <p>Tap a category to open its <b>sheet</b> over the lower screen; the car stays framed above it and shows the state
+    the sheet can’t. Drag the sheet’s grab-handle to change its height. The dock stays docked, so you move between
+    categories without closing. Tap <b>✕</b> (or tap away from the car) to close.</p>
+    <p>The dock scrolls: <b>Lighting, Climate, Seats, Driving, Assist, Energy, Audio, Doors, Service, Display</b>, then the
+    system panels <b>Connectivity, Profiles&nbsp;&amp;&nbsp;Keys, Navigation, General, Software</b>.</p>
+    <p class="muted">The “MOCKUP” tag on the left edge means no live car is connected — these captures are the demo state.
+    On the car the values are live.</p>
+  </div>
+</div>
+
+<!-- READING A CONTROL -->
+<h2 class="sec">2 · Reading a control</h2>
+<p>Every control carries a small tag that says what it does on the car. This is the single most important thing to
+read before you touch anything.</p>
+<table>
+  <colgroup><col style="width:24%"><col style="width:76%"></colgroup>
+  <tr><th>Tag</th><th>What it means</th></tr>
+  <tr><td><span class="tag t-send">Sends</span></td>
+      <td>You can set it. The app sends the head unit’s own message for that control and shows the car’s reply when it
+      comes back. Example: headlights, seat heat, lock, fold mirrors.</td></tr>
+  <tr><td><span class="tag t-read">Reads only</span></td>
+      <td>Shows the car’s current value; you can’t change it from here. Example: follow-me-home time, regen level,
+      tyre pressures.</td></tr>
+  <tr><td><span class="tag t-comma">Via comma</span></td>
+      <td>A driver-assistance setting. It goes through the comma to the ADAS module and applies at once — so it works
+      only when the comma is connected. Example: adaptive cruise, set-speed follows the limit.</td></tr>
+  <tr><td><span class="tag t-na">Not available</span></td>
+      <td>Greyed, with a lock. Either the car has no message for it, or the head unit overwrites ours every cycle.
+      Some of these can be unlocked by the <b>parked trial</b> (section 11).</td></tr>
+</table>
+<p style="margin-top:10px"><b>Controls on the car itself.</b> Some controls aren’t in the sheet — they’re on the 3D car:
+drag the <b>chevrons</b> on each window, the sunroof and the liftgate; tap the <b>heat chips</b> on the rear seats; use the
+<b>jog pad</b> for seat position; read <b>tyre pressures</b> on the wheels.</p>
+
+<!-- CATEGORIES -->
+<h2 class="sec">3 · The categories</h2>
+
+<div class="cat">
+  <div class="fig"><img src="02-lighting.png" alt="lighting"><div class="cap">Lighting</div></div>
+  <div class="body">
+    <h3>Lighting</h3>
+    <ul class="tight">
+      <li><b>Headlights</b> <span class="tag t-send">Sends</span> — Off / Auto / Parking / Low. <span class="muted">Auto is the stalk’s own position and can’t be sent.</span></li>
+      <li><b>Adaptive driving beam</b> <span class="tag t-send">Sends</span>.</li>
+      <li><b>Auto high beam</b> <span class="tag t-na">Not available</span> — a driver-assistance setting (unlock in the trial).</li>
+      <li><b>Follow me home</b>, <b>Interior lights off after</b> <span class="tag t-read">Reads only</span>.</li>
+      <li><b>Ambient lighting</b> + <b>brightness</b> <span class="tag t-na">Not available</span> — head-unit-owned (unlock in the trial).</li>
+    </ul>
+  </div>
+</div>
+
+<div class="cat">
+  <div class="fig"><img src="03-climate.png" alt="climate"><div class="cap">Climate</div></div>
+  <div class="body">
+    <h3>Climate</h3>
+    <p class="muted" style="margin:0 0 6px">Every button here sends to the car, except Schedule. The temperatures shown are a demo (no message for them).</p>
+    <ul class="tight">
+      <li><b>Power</b>, <b>Auto</b>, <b>A/C</b> <span class="tag t-send">Sends</span>.</li>
+      <li><b>Airflow</b> — Front / Rear direction, windshield and rear defrost.</li>
+      <li><b>Fan speed</b> — step with the chevrons.</li>
+      <li><b>Recirculate</b> and <b>eco</b>.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="cat">
+  <div class="fig"><img src="04-seats.png" alt="seats"><div class="cap">Seats — jog pad &amp; heat chips</div></div>
+  <div class="body">
+    <h3>Seats</h3>
+    <ul class="tight">
+      <li><b>Heat</b> (each seat) <span class="tag t-send">Sends</span> — levels 0–3; rear seats as chips on the car.</li>
+      <li><b>Position</b> jog pad <span class="tag t-send">Sends</span> — slide, tilt, seatback, height, recline. Hold a button to move; see the trial in section 11 for how the seat-move message is sent.</li>
+      <li><b>Memory</b> 1 / 2 / 3 <span class="tag t-send">Sends</span> — recall a position. <span class="muted">Saving is a head-unit key: hold its memory button in the car.</span></li>
+      <li><b>Easy entry</b> <span class="tag t-send">Sends</span> — slides the seat back for getting in and out.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="cat">
+  <div class="fig"><img src="05-driving.png" alt="driving"><div class="cap">Driving</div></div>
+  <div class="body">
+    <h3>Driving</h3>
+    <ul class="tight">
+      <li><b>Drive mode</b> — Earth / Fun / Hyper. <span class="muted">Sending the mode is head-unit-owned (unlock in the trial).</span></li>
+      <li><b>Regenerative braking</b>, <b>Creep</b>, <b>Accelerator response</b> <span class="tag t-read">Reads only</span> — unlock in the trial.</li>
+      <li><b>Steering feel</b>, <b>Auto hold</b>, <b>Traction control</b>, <b>Hill descent</b> <span class="tag t-na">Not available</span>.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="cat">
+  <div class="fig"><img src="06-assist.png" alt="assist"><div class="cap">Assist — routes through the comma</div></div>
+  <div class="body">
+    <h3>Assist <span class="tag t-comma">Via comma</span></h3>
+    <p class="muted" style="margin:0 0 6px">These go to the car through the comma (gear → CAN settings) and apply at once; the rest show the head unit’s own values. Needs the comma connected.</p>
+    <ul class="tight">
+      <li><b>Adaptive cruise</b>, <b>Set speed follows the limit</b>, <b>Over the limit</b> (Never / Percent / Fixed) <span class="tag t-comma">Via comma</span>.</li>
+      <li><b>Active safety</b>, <b>Cruise type</b>, <b>Following distance</b> <span class="tag t-na">Not available</span> without the comma.</li>
+      <li>Sections: Cruise, Lane keeping, Collisions, Blind spot, Speed &amp; signs, Parking.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="cat">
+  <div class="fig"><img src="07-energy.png" alt="energy"><div class="cap">Energy</div></div>
+  <div class="body">
+    <h3>Energy</h3>
+    <ul class="tight">
+      <li><b>Charge limit</b> — slider (daily use vs. 100% before a long trip). Head-unit-owned; unlock in the trial.</li>
+      <li><b>Charge current</b> <span class="tag t-read">Reads only</span>.</li>
+      <li><b>Start charging</b> — unlock in the trial (charging is on the trial list).</li>
+      <li><b>Scheduled charging</b> / <b>Start at</b> <span class="tag t-na">Not available</span>.</li>
+      <li><b>Power out (V2L)</b> — unlock in the trial.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="cat">
+  <div class="fig"><img src="08-doors.png" alt="doors"><div class="cap">Doors &amp; Windows — on-car chevrons</div></div>
+  <div class="body">
+    <h3>Doors &amp; Windows</h3>
+    <ul class="tight">
+      <li><b>Lock / Unlock</b> <span class="tag t-send">Sends</span> — all doors or the driver’s door; <b>Lock when walking away</b>.</li>
+      <li><b>Close all</b>, <b>Fold mirrors</b> <span class="tag t-send">Sends</span>.</li>
+      <li><b>California Mode</b> <span class="tag t-na">Not available</span> — head-unit-owned (unlock in the trial).</li>
+      <li><b>Rear window lock</b>, <b>Child locks</b> <span class="tag t-na">Not available</span>.</li>
+      <li><b>Windows, sunroof, liftgate</b> — drag the chevrons on the car.</li>
+    </ul>
+  </div>
+</div>
+
+<section>
+  <h3>The rest</h3>
+  <table>
+    <colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+    <tr><th>Category</th><th>What’s there</th></tr>
+    <tr><td><b>Audio</b></td><td>Equalizer, Sound, Radio, Announcements. Mostly greyed — one CAN frame carries every volume with nothing to copy, so the app never sends audio. It stays greyed even in the trial.</td></tr>
+    <tr><td><b>Service</b></td><td>Vehicle info, Tyre pressures <span class="tag t-read">Reads only</span> (on the wheels), Help.</td></tr>
+    <tr><td><b>Display</b></td><td>HUD layout (Classic / Glance strip / Tile dash), theme, units. These change the <i>HUD</i>, not the car, so they’re always available.</td></tr>
+    <tr><td><b>Connectivity · Profiles · Navigation · General · Software</b></td><td>System panels. Shown with <i>Settings → Debug → Demo car controls</i>; informational on the HUD.</td></tr>
+  </table>
+</section>
+
+<!-- THE TRIALS -->
+<h2 class="sec">4 · Unlocking the greyed controls — the parked trials</h2>
+<div class="cat">
+  <div class="fig"><img src="09-trial-settings.png" alt="trial settings"><div class="cap">Settings → Display → Debug</div></div>
+  <div class="body">
+    <p>The greyed controls are off because the head unit owns their message and re-sends its own value every cycle, or
+    because they’re driver-assistance settings. Two switches in <b>Settings → Display → Debug</b> turn on a parked trial
+    that sends them anyway. Both are <b>off by default</b> and work <b>only in Park (gear P)</b>.</p>
+    <h3 style="margin-top:8px">Seat move trial</h3>
+    <p>Off / Every 100&nbsp;ms / Every 25&nbsp;ms. Makes the seat adjusters send the head unit’s seat-move message
+    (<code>ICC_0x533</code>) while a jog button is held — at 100&nbsp;ms as the head unit is specified, or 25&nbsp;ms so
+    ours outnumber the head unit’s idle frames. Watch <i>Seats → From the car</i> and <i>Signals → IBUS1 → 0x533</i>.</p>
+    <h3 style="margin-top:8px">Unlock controls (parked trial)</h3>
+    <p>Un-greys the controls that send the head unit’s own message: <b>drive mode, regen, creep, brightness, ambient
+    light, California Mode, charging, V2L</b>, and the <b>driver-assistance settings</b>. Setting one copies the head unit’s
+    current frame, changes that one field (and, for the counter-protected messages, continues the alive counter and
+    fixes the checksum), and sends it for about a second.</p>
+  </div>
+</div>
+<div class="warn"><b>What to expect.</b> The head unit re-sends its own value every cycle, so a change may be undone almost
+at once — watch the control’s <i>From the car</i> row to see whether the car acted on it. Each control’s encoding is a
+best guess to confirm one by one. Audio stays greyed. The trial refuses to send while the car is out of Park.</div>
+
+<div class="note" style="margin-top:10mm"><b>About these screenshots.</b> They were captured with no live car, so the values
+(speed, charge, pressures, temperatures) are demo placeholders and every control’s live/greyed state is the default.
+On the car, values are live, controls follow what the car reports, and the trial controls are available only in Park.</div>
+
+</body>
+</html>
