@@ -17,18 +17,20 @@ import { RoadCam } from './roadcam.js';
 import { HudLayout } from './hudlayout.js';
 import { StopLog } from './stopplan.js';
 
-const SETTINGS_VERSION = 3;
+const SETTINGS_VERSION = 4;
 const AUTO_VIEW_HOLD_MS = 10000;   // a parking maneuver starting this soon after the user picked a view keeps it
 const TAP_PX = 8, TAP_MS = 300;    // a tap moves less and is shorter than this; two within TAP_MS are a double tap
 const STALE_MS = 6000;             // the comma streams at 20 Hz: this long without a message means its link is dead
 const COMMA_MS = 3000;             // the comma's stream counts as live this long after its last tick or snapshot
 const LOCAL_MS = 2500;             // the car's own view (10 Hz) counts as live this long after its last snapshot
+const RENDER_ACTIVE_HOLD_MS = 1500;   // after any motion or touch, keep the 3D view at full rate this long
+const RENDER_IDLE_MS = 50;            // parked with nothing happening: redraw the 3D view at ~20 Hz, not 60
 const DEFAULTS = {
   theme: 'auto', units: 'auto', trafficSide: 'auto', cameraSignUnits: 'auto', laneSource: 'blend', egoPaint: OCEAN_PAINT_DEFAULT, egoWheels: OCEAN_WHEELS_DEFAULT, view: 'chase',
   showPath: true, showUss: true, showOpLeads: true, autoView: true, showGround: true, showRoad: true, showSigns: true,
   showTracks: true, showRadar: true, radarAllTracks: false, showLowConf: false, showObjectStats: false, objectMode: 'world',
   laneHeadingSign: 1, laneCurvatureSign: 1, objectHeadingSign: 1, laneConfThreshold: LANE_CONF_THRESHOLD,
-  showFps: true, renderScale: 'auto', showMusic: true, showNav: true, miniMap: true, demoInfotainment: false, demoCarState: false, carDemo: false,
+  showFps: false, renderScale: 'auto', showMusic: true, showNav: true, miniMap: true, demoInfotainment: false, demoCarState: false, carDemo: false,
   calibration: true, mapPrefetchKm: 25, positionSource: 'car', roadcam: 'mirror', layout: 'classic', stopPlan: true, stopOffsetM: 0,
   seatTrial: 'off', controlTrial: false,
 };
@@ -46,6 +48,11 @@ function loadSettings() {
     const paint = { '#1d1f24': 'CBK', '#e8e9eb': 'CWH', '#6e7781': 'CGR', '#3a5a8c': 'CBE', '#7d2b2b': 'CRE', '#5f6b4e': 'CGM' }[s.egoColor];
     if (paint) s.egoPaint = paint;
     delete s.egoColor;
+  }
+  if ((s.version || 1) < 4) {
+    // v4: the frame-rate chip is a debug overlay, now off by default; drop the old stored value (it defaulted on)
+    // so the new default applies. Anyone who wants it back has Settings > Display > Debug > Frame rate.
+    delete s.showFps;
   }
   return { ...DEFAULTS, ...s, version: SETTINGS_VERSION };
 }
@@ -115,7 +122,16 @@ class App {
     // the screen's own location, while the position source is 'device' (the app only sends it then)
     this.deviceFix = null;         // the last one, or {error}, with rx (Date.now()) for the settings' status
     window.addEventListener('webhud:location', (e) => this.onDeviceLocation(e.detail));
+    // the Android app forwards Android's low-memory warning (MainActivity.onTrimMemory): shed GPU memory before
+    // the system takes our context
+    window.addEventListener('webhud:memory', (e) => this.onMemoryPressure(e.detail && e.detail.level));
     this.applyPositionSource();
+    // Any touch or key brings the 3D view back to full rate for a moment (see the loop): on a touchscreen there is
+    // no hover, so pointermove only fires while a finger is down.
+    this.renderActiveUntil = 0;
+    this.lastRenderAt = 0;
+    for (const t of ['pointerdown', 'pointermove', 'wheel', 'keydown'])
+      window.addEventListener(t, () => { this.renderActiveUntil = performance.now() + RENDER_ACTIVE_HOLD_MS; }, { passive: true, capture: true });
     let last = performance.now();
     const loop = (now) => {
       requestAnimationFrame(loop);   // schedule first: one bad frame must not stop the HUD
@@ -127,8 +143,14 @@ class App {
       const mock = this.car.apa;
       const state = mock ? mock.state : this.liveState(), settings = mock ? mock.settings : this.settings;
       try { this.vehicle.update(state, mock ? 0 : now - this.lastStateAt, dt); } catch (e) { this.reportError(e); }
+      // Parked with nothing moving or open, redraw the 3D view at a low rate; moving or interacting restores full
+      // rate. Hidden (the other app is in front), skip the redraw entirely. This is the GPU work -- and the heat --
+      // we were spending to hold a still image, and that heat can itself make the shared driver drop our context.
+      const busy = mock || this.vehicle.speed > 0.3 || this.ui.isOpen || this.car.isOpen || this.roadcam.isOpen || this.seeking;
+      if (busy) this.renderActiveUntil = now + RENDER_ACTIVE_HOLD_MS;
+      const drawScene = !document.hidden && (now <= this.renderActiveUntil || now - this.lastRenderAt >= RENDER_IDLE_MS);
       try { if (mock) this.scene.update(state, settings); } catch (e) { this.reportError(e); }
-      try { this.scene.frame(dt, this.vehicle); } catch (e) { this.reportError(e); }
+      if (drawScene) { try { this.scene.frame(dt, this.vehicle); } catch (e) { this.reportError(e); } this.lastRenderAt = now; }
       try { this.roadcam.frame(); } catch (e) { this.reportError(e); }
       try { this.car.frame(dt); } catch (e) { this.reportError(e); }
       try { if (state) this.hud.update(state, settings, this.vehicle); } catch (e) { this.reportError(e); }
@@ -215,6 +237,13 @@ class App {
     if (d.error || !this.worker) return;
     this.worker.postMessage({ type: 'location', t: Date.now() / 1000,
       fix: { lat: d.lat, lon: d.lon, acc: d.acc ?? null, speed: d.speed ?? null, bearing: d.bearing ?? null, fixT: d.at != null ? d.at / 1000 : null } });
+  }
+
+  // Android is low on memory and may soon take our GL context (MainActivity.onTrimMemory forwards this). Shed the
+  // largest GPU thing we control -- the 3D view's render resolution -- to its floor, so we shrink before the system
+  // forces a drop. (The worker's map cache is already bounded and lives in the worker's heap, not GPU memory.)
+  onMemoryPressure(level) {
+    try { this.meter.shed(); } catch (e) { this.reportError(e); }
   }
 
   updateLayout() {

@@ -13,7 +13,7 @@
 // In a plain browser nothing is live and nothing is sent: the values live in this page (this.v).
 import * as THREE from '../vendor/three.module.min.js';
 import { $, $$, el, iconSvg, setClass, setText } from './util.js';
-import { CATEGORIES, DRIVE_MODES, SEAT_LIMITS, SEAT_MEMORY, MSG, TRIAL, defaults, liveControls, liveExtras } from './carcatalog.js';
+import { CATEGORIES, DRIVE_MODES, SEAT_LIMITS, SEAT_MEMORY, MSG, MOCK as MOCK_OFF, TRIAL, defaults, liveControls, liveExtras } from './carcatalog.js';
 import { ZONES, ANCHORS } from './cutaway.js';
 import { ApaMock, APA_SIGNALS } from './apamock.js';
 import { AppUpdate } from './appupdate.js';
@@ -22,7 +22,7 @@ import { AccSettings } from './accsettings.js';
 const OVERVIEW = { at: [0, 0.6, 2.4], az: 180, el: 90, fit: [2.3, 5.1] };   // top down, nose up...
 const OVERVIEW_WIDE = { at: [0, 0.6, 2.4], az: 90, el: 90, fit: [5.1, 2.3] };   // ...or right, on a short screen
 const SHORT_PX = 420;     // free height below which the overview turns the car on its side
-const MOCK_OFF = 'Mockup: nothing on the car for this';   // carcatalog.js MOCK: off in the browser too
+// MOCK_OFF is carcatalog.js's MOCK reason, imported above so the two never drift
 
 // What a control does on the car, for the tag beside it: sends (setting it sends the head unit's message), reads
 // (shows what the car reports, can't change it), comma (an ACC setting the comma sends the ADAS module),
@@ -39,6 +39,7 @@ export function kindOf(c) {
 }
 const KIND_TAG = { sends: 'Sends', reads: 'Reads only', comma: 'Via comma', unavailable: 'Not available', demo: 'Demo' };
 const LIVE_SYNC_S = 0.2;   // how often the controls take the car's values
+const RECON_MS = 2200;     // how long a just-sent value is held while the car's reply is watched (optimistic -> confirmed/overridden)
 const ACC_POLL_MS = 3000;  // how often Assist re-reads the comma's ACC settings while it's open
 const SEAT_HEAT = 0xff6a2a;
 const CARD_GAP = 56;      // px between a card and the point it's about
@@ -77,6 +78,7 @@ export class CarControls {
     }
     this.liveList = liveControls();
     this.liveIds = new Set();   // the controls the car reports right now: their values are the car's, not ours
+    this.recon = new Map();     // id -> { sent, until }: a value we just sent, watched against the car's reply (set()/trialSend)
     this._syncT = 0;
     this.pins = [];
     this.watchers = [];
@@ -317,6 +319,7 @@ export class CarControls {
     if (!this.sending) { this.app.toast(this.cmd.why || 'Not connected to the car'); return true; }
     if (!this.trialParked) { this.app.toast('Control trial: parked only (gear P)'); return true; }
     this.cmd.trial(t.bus === 'IBUS2' ? 'IBUS2' : 'IBUS1', t.addr, t.build(value), !!t.e2e);
+    this.recon.set(c.id, { sent: value, until: performance.now() + RECON_MS });   // watch for the head unit overriding it
     this.v[c.id] = value;
     this.notify();
     return true;
@@ -617,11 +620,16 @@ export class CarControls {
     }
     let changed = false;
     const mode = this.liveIds.has('drive.mode') ? this.v['drive.mode'] : null;   // the mode the car reported last
+    const eq = (a, b) => ((typeof a === 'object' && a !== null) || (typeof b === 'object' && b !== null)) ? JSON.stringify(a) === JSON.stringify(b) : a === b;
     const take = (id, v) => {
       this.liveIds.add(id);
-      const prev = this.v[id];
-      const same = typeof v === 'object' && v !== null ? JSON.stringify(prev) === JSON.stringify(v) : prev === v;
-      if (!same) { this.v[id] = v; changed = true; }
+      const r = this.recon.get(id);
+      if (r) {
+        if (eq(r.sent, v)) this.recon.delete(id);                                      // the car took our value: confirmed
+        else if (performance.now() < r.until) return;                                  // hold the optimistic value a moment
+        else { this.recon.delete(id); this._revert(id, v); changed = true; return; }   // car still differs: overridden, snap back
+      }
+      if (!eq(this.v[id], v)) { this.v[id] = v; changed = true; }
     };
     for (const [id, live] of this.liveList) {
       const v = live(cs);
@@ -629,6 +637,9 @@ export class CarControls {
       else this.liveIds.delete(id);
     }
     for (const [id, v] of Object.entries(liveExtras(cs))) take(id, v);
+    // drop stale sends we never got a reply for (a control the car does not report back): can't confirm, don't nag
+    const nowT = performance.now();
+    for (const [id, r] of this.recon) if (nowT > r.until + 2000) this.recon.delete(id);
     // the car changed its drive mode (its own button): the same ring out from the car as a change here, in
     // any view; not on its first report, which is only the mode it was already in
     if (mode && this.liveIds.has('drive.mode') && this.v['drive.mode'] !== mode) this.pulseMode();
@@ -641,6 +652,13 @@ export class CarControls {
       const text = this.sending ? 'On the car' : this.inApp ? 'Car link down' : 'Mockup';
       if (this.mockTag.textContent !== text) { setText(this.mockTag, text); setClass(this.mockTag, 'ok', this.sending); setClass(this.mockTag, 'warn', this.inApp && !this.sending); }
     }
+  }
+
+  // The car kept asserting its own value after we sent ours — the head unit's cyclic frame during the control
+  // trial is the canonical value, so snap the control to it and say so, rather than leaving a dead optimistic value.
+  _revert(id, carVal) {
+    this.v[id] = carVal;   // snap the control to the car's value; apply()/notify() repaint it
+    this.app.toast('The head unit changed this back');
   }
 
   // Assist's ACC settings as the comma has them
@@ -708,7 +726,12 @@ export class CarControls {
     if (def && def.tx && this.inApp) {
       if (!this.sending) { this.app.toast(this.cmd.why || 'Not connected to the car'); return; }
       def.tx(this.cmd, value, this.app.carState);
-      if (this.liveIds.has(id)) { this.notify(); return; }   // the car reports it: its answer is the new value
+      if (this.liveIds.has(id)) {   // the car reports it: show our value now, confirm (or snap back) from the car's reply
+        this.recon.set(id, { sent: value, until: performance.now() + RECON_MS });
+        this.v[id] = value;
+        this.notify();
+        return;
+      }
     }
     const prev = this.v[id];
     this.v[id] = value;
@@ -840,14 +863,24 @@ export class CarControls {
     if (node && c.acc) this.accOff(node);
     if (node && c.off && this.trialOn(c)) { node.dataset.trial = '1'; return node; }   // un-greyed by the control trial
     if (node && c.off && (this.inApp || c.off === MOCK_OFF)) {
-      node.classList.add('off');
-      node.title = c.off;
-      if (node.classList.contains('fo-row')) {
-        const ctl = node.lastElementChild;
-        node.insertBefore(icon('lock'), ctl);
+      node.title = c.off;   // the full reason; a tap also toasts it (set())
+      if (node.dataset.kind === 'reads') {
+        // read-only: a live value the driver should read. Keep it full-contrast and readable (not muted like a
+        // blocked control), remove only the edit affordance, and mark it read-only, not disabled, for a11y.
+        node.classList.add('readonly');
+        node.setAttribute('aria-readonly', 'true');
+      } else {
+        // blocked. Temporarily-unavailable (the parked trial can send it when parked) gets a lock and reads as
+        // "will return"; a permanently-blocked control is muted with its reason and no lock.
+        node.classList.add('off');
+        const temp = !!TRIAL[c.id];
+        if (temp) {
+          node.classList.add('off--temp');
+          if (node.classList.contains('fo-row')) node.insertBefore(icon('lock'), node.lastElementChild);
+        }
+        for (const i of node.querySelectorAll('input, button, select')) { i.disabled = true; i.setAttribute('aria-disabled', 'true'); }
+        if (node.tagName === 'BUTTON') node.disabled = true;
       }
-      for (const i of node.querySelectorAll('input, button, select')) i.disabled = true;
-      if (node.tagName === 'BUTTON') node.disabled = true;
     }
     return node;
   }

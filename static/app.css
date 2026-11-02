@@ -170,6 +170,14 @@ html.lowfx .card, html.lowfx .viewdock > button.icon, html.lowfx .viewmenu { bac
 .alert.info { background: var(--accent); color: #fff; } .alert.info span { color: rgba(255,255,255,.85); }
 @keyframes drop { from { transform: translateY(-10px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes pulse { 50% { filter: brightness(1.15); } }
+/* While driving, and for anyone who asks for reduced motion, still the decorative DOM entrance animations (slides,
+   pops, the alert drop) so panels appear without drawing the eye. The 3D scene is WebGL (unaffected by this) and
+   keeps moving as driving information; a genuine safety alert's pulse (.alert.critical) is deliberately kept. */
+:root[data-driving="true"] .alert:not(.critical),
+:root[data-driving="true"] .menu, :root[data-driving="true"] aside.carpanel { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .alert:not(.critical), .menu, aside.carpanel { animation: none !important; }
+}
 
 .chips { position: absolute; top: 16px; right: 16px; display: flex; gap: 6px; z-index: 5; }
 .chip { font-size: 11px; font-weight: 700; letter-spacing: .8px; padding: 5px 9px; border-radius: 99px; background: var(--panel); color: var(--muted); box-shadow: var(--shadow); text-transform: uppercase; }
@@ -407,7 +415,7 @@ html.carmode .musiccard, html.carmode .navcard { display: none; }
 
 /* the dock: a flat bar across the bottom, below the screen until the car is tapped */
 nav.carribbon { position: absolute; left: 0; right: 0; bottom: 0; z-index: 10; padding-bottom: env(safe-area-inset-bottom);
-  transform: translateY(calc(100% + 8px)); transition: transform .38s cubic-bezier(.2, .8, .2, 1); }
+  transform: translateY(calc(100% + 8px)); transition: transform var(--fo-t-sheet) var(--fo-ease); }
 html.carmode nav.carribbon { transform: none; }
 html.carmode .viewdock, html.carmode .musiccard, html.carmode .navcard, html.carmode #replaybar { display: none; }
 
@@ -415,13 +423,13 @@ html.carmode .viewdock, html.carmode .musiccard, html.carmode .navcard, html.car
    (.peek / .half / .full, DESIGN.md) and sits on the dock */
 aside.carpanel { position: absolute; z-index: 9; top: 16px; right: 16px; bottom: calc(var(--ribbon-h, 112px) + 16px); width: min(44vw, 700px);
   border-radius: var(--fo-r); border: 1px solid var(--fo-line); transform: translateX(calc(100% + 40px)); visibility: hidden;
-  transition: transform .38s cubic-bezier(.2, .8, .2, 1), visibility 0s .38s; }
-aside.carpanel.open { transform: none; visibility: visible; transition: transform .38s cubic-bezier(.2, .8, .2, 1); }
+  transition: transform var(--fo-t-sheet) var(--fo-ease), visibility 0s var(--fo-t-sheet); }
+aside.carpanel.open { transform: none; visibility: visible; transition: transform var(--fo-t-sheet) var(--fo-ease); }
 @media (max-aspect-ratio: 1/1) {
   aside.carpanel { top: auto; left: 0; right: 0; bottom: var(--ribbon-h, 7rem); width: auto; height: 53rem; border: 0; border-top: 1px solid var(--fo-line);
     border-radius: var(--fo-r-sheet) var(--fo-r-sheet) 0 0; transform: translateY(calc(100% + 8px));
-    transition: transform .38s cubic-bezier(.2, .8, .2, 1), height .38s cubic-bezier(.2, .8, .2, 1), visibility 0s .38s; }
-  aside.carpanel.open { transition: transform .38s cubic-bezier(.2, .8, .2, 1), height .38s cubic-bezier(.2, .8, .2, 1); }
+    transition: transform var(--fo-t-sheet) var(--fo-ease), height var(--fo-t-sheet) var(--fo-ease), visibility 0s var(--fo-t-sheet); }
+  aside.carpanel.open { transition: transform var(--fo-t-sheet) var(--fo-ease), height var(--fo-t-sheet) var(--fo-ease); }
   aside.carpanel.peek { height: 28rem; }
   aside.carpanel.full { height: 85rem; }
   aside.carpanel.hvac { height: 22rem; }

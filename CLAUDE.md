@@ -69,7 +69,7 @@ Do not edit these by hand. Change the generator and re-run it:
 | `dbc/fisker_ocean_ibus.dbc`, `static/js/ibus_tables.js`, `android/.../CanIds.kt` | `tools/gen_ibus.py` | FM29 IBUS1 and IBUS2 matrix `.xlsx` |
 | `dbc/fisker_ocean_adas_world.dbc` | `tools/gen_world_dbc.py` (also copy the result to sunnypilot) | FM29 ADASBUS matrix `.dbc` |
 | `android/app/src/main/jniLibs/arm64-v8a/libcanbridge.so` | `android/canbridge/build.sh` (needs Go) | `canbridge/main.go` |
-| `third_party/models/pulse_ocean_v0.10_parts.glb` | `tools/export_ocean_glb.py` in Blender | Pulse Ocean `.blend` and `.glb` |
+| `third_party/models/pulse_ocean_v0.10_parts.glb` | `tools/export_ocean_glb.py` in Blender, then `tools/compress_model.sh` | Pulse Ocean `.blend` and `.glb` |
 
 `dbc/fisker_ocean_mrr.dbc` is reverse-engineered, and the matrices have known errors. Signal corrections live in the generators (`CORRECTIONS` in `gen_world_dbc.py`).
 

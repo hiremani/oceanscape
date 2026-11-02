@@ -85,6 +85,19 @@ html.fo { font-size: 16px; }
 .fo .fo-icon svg[stroke-width] { stroke-width: 1.6; }   /* thinner than the HUD's own icons, as Tesla's are */
 .fo [disabled], .fo .off { pointer-events: none; }
 .fo .off, .fo .off .fo-icon, .fo .off .fo-row__sub, .fo .off b { color: var(--fo-ink-3); }
+/* Read-only: a live value the driver should read. Unlike a blocked control it stays full-contrast and readable;
+   only its "Reads only" tag dims, and the edit affordance is gone (set() still toasts the reason on a tap). */
+.fo .readonly { cursor: default; }
+.fo .readonly .fo-tag { color: var(--fo-ink-3); }
+/* Temporarily-unavailable (the parked trial can send it): the lock glyph reads "will return", not "can't". */
+.fo .off--temp > .fo-icon { opacity: .7; }
+/* Press acknowledgement: an instant state-layer the moment a finger lands, decoupled from the 3D frame, so a tap
+   always feels immediate (M3 pressed ~10% role colour; --fo-accent-tint is defined per theme). */
+.fo .fo-btn:active, .fo .fo-cbtn:active, .fo .fo-tile:active, .fo .fo-ib:active:not(.off),
+.fo .fo-words > button:active, .fo .fo-seg button:active, .fo .fo-jog button:active:not(.off) {
+  background: var(--fo-accent-tint);
+  transition: background var(--fo-t-press);
+}
 
 /* a cell: the one surface every control is made of */
 .fo-cell { background: var(--fo-cell); border: .0625rem solid var(--fo-line); border-radius: var(--fo-r); }

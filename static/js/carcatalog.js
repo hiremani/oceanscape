@@ -31,7 +31,9 @@
 
 // ---- the head unit's messages the HUD sends (ibus_tables.js TX_MESSAGES) ------------------------------
 export const MSG = { BODY: 0x4E, CLIMATE: 0x530, CLIMATE2: 0x534, PROFILE: 0x90, SEATHEAT: 0x528, SEATMOVE: 0x533, LIFTGATE: 0x52 };
-const AUDIO_FRAME = 'Its message (ICC_0x46) also carries every audio volume and the mute, with nothing to copy the current ones from: sending it would reset the audio';
+// Reason strings shown under a greyed control. One shape each, so the eye learns the pattern (carcontrols.js
+// renders these as the always-visible hint; a tap reveals the same text in full).
+const AUDIO_FRAME = 'Can’t send — one message carries every volume, so sending would reset the audio.';
 const ON_OFF = { true: 1, false: 2 };   // the 0x4E "1 On / 2 Off" convention (0 = inactive)
 
 // tx helpers: (cmd, value, carState) -> sends
@@ -46,10 +48,10 @@ const map = (sig, table) => (cs) => { const r = cs.rawOf(sig); return r === unde
 const HEAT_FROM_CAR = { 1: 3, 2: 2, 3: 1, 4: 0 };   // DSMC/PSM heat status: High/Med/Low/Off -> levels 3..0
 const HEAT_TO_CAR = { 0: 4, 1: 3, 2: 2, 3: 1 };
 
-const OWNED = 'The head unit sends this setting itself every second; a request of ours would be undone at once';
-const NO_MSG = 'The car has no message for this';
-const MOCK = 'Mockup: nothing on the car for this';
-const ADAS = 'Set under the gear menu → CAN settings (the comma sends the driver-assistance settings)';
+const OWNED = 'The head unit controls this setting.';
+const NO_MSG = 'Not available on this car.';
+export const MOCK = 'Preview — not connected to the car.';
+const ADAS = 'Set on the comma (gear → CAN settings).';
 
 const T = (id, label, def, sub, x = {}) => ({ id, type: 'toggle', label, def, sub, ...x });
 const S = (id, label, options, def, sub, x = {}) => ({ id, type: 'seg', label, options, def, sub, ...x });

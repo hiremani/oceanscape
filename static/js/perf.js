@@ -7,7 +7,7 @@
 import { $, el, setClass, setText } from './util.js';
 
 const WINDOW_MS = 1000;
-// auto's steps: the resolution, as a share of the full one (scene.js: the device's pixel ratio, at most 1.75),
+// auto's steps: the resolution, as a share of the full one (scene.js: the device's pixel ratio, at most MAX_DPR),
 // and whether the cards keep their blur
 const AUTO_LEVELS = [{ scale: 1, blur: true }, { scale: 1, blur: false }, { scale: 0.85 }, { scale: 0.7 }, { scale: 0.6 }];
 const SLOW = 0.88, FAST = 0.97;            // of the display's rate: below, a window is slow; at or above, fast
@@ -89,6 +89,16 @@ export class FrameMeter {
     const k = auto ? step.scale : Number(this.app.settings.renderScale) || 1;
     if (this.app.scene.renderScale !== k) this.app.scene.setRenderScale(k);
     document.documentElement.classList.toggle('lowfx', auto && !step.blur);
+  }
+
+  // Android is low on memory (main.onMemoryPressure): pin the 3D view to its lowest resolution to free GPU memory,
+  // and keep auto from raising it back for a while. On a fixed resolution this drops it to the floor until a reload.
+  shed() {
+    this.level = AUTO_LEVELS.length - 1;
+    this.holdUntil = performance.now() + HOLD_MS;
+    this.raisedAt = -1e9;
+    if (this.app.settings.renderScale === 'auto') this._setLevel();
+    else this.app.scene.setRenderScale(AUTO_LEVELS[this.level].scale);
   }
 
   _reset(now) { this.win = { start: now, frames: 0, worst: 0, work: 0, intervals: [] }; }

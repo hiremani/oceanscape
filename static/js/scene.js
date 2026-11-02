@@ -300,11 +300,27 @@ function offsetLine(pts, d) {
   });
 }
 
+// The most the drawing buffer is scaled past the CSS size. The Ocean's panel reports a high device pixel ratio,
+// which at the old cap (1.75) made a buffer about three times the screen's pixels -- a large colour and depth
+// allocation on a GPU shared with two other apps. 1.25 still downsamples (so edges stay smooth without MSAA) at a
+// fraction of the memory and bandwidth; perf.js lowers it further, from this cap, when frames come slow.
+const MAX_DPR = 1.25;
+
 export class CarScene {
   constructor(canvas) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+    // No MSAA: the drawing buffer is already above the CSS size (MAX_DPR below), so it is downsampled, which
+    // smooths edges without the multisample buffers. On this board the GPU is shared with Pulse's own app, and
+    // dropping MSAA frees the memory and bandwidth that pressure takes from us (see _onContextRestored).
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
     this.renderScale = 1;   // of the full resolution (perf.js lowers it when frames come slow)
+    // The shared GPU can drop our context under memory pressure; without a restore it stays blank for good.
+    // Three preventDefaults the loss (so a restore can come) and no-ops rendering while it is gone, then
+    // re-uploads its own geometry, textures and materials on restore. What it cannot rebuild is a texture we
+    // baked into a render target ourselves, so _onContextRestored regenerates the car's environment map.
+    this.contextLost = false;
+    canvas.addEventListener('webglcontextlost', () => { this.contextLost = true; console.warn('WebHud: GL context lost'); }, false);
+    canvas.addEventListener('webglcontextrestored', () => this._onContextRestored(), false);
     this.renderer.setPixelRatio(this._pixelRatio());
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -322,7 +338,7 @@ export class CarScene {
     // under the car in whole tiles so it never runs out. Where it shows -- a disc around the car, grown
     // out into the road once the lanes show -- is the road field (ground.js), which also masks the lane
     // lines, stop lines and headlight throw.
-    const aniso = this.renderer.capabilities.getMaxAnisotropy();
+    const aniso = Math.min(this.renderer.capabilities.getMaxAnisotropy(), 4);   // 4 is plenty for the ground; 16 just costs sampling
     this.field = new RoadField(aniso);
     this.world = new THREE.Group();
     this.ground = new THREE.Mesh(new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE).rotateX(-Math.PI / 2), this.field.groundMaterial(aniso));
@@ -504,6 +520,18 @@ export class CarScene {
     });
   }
 
+  // The GPU context came back after being dropped (see the constructor). Three has reset its own state and
+  // re-uploads tracked geometry, textures and materials on the next render; what it cannot rebuild is the
+  // environment map we baked into a render target, so regenerate it, relight the car and resize to this buffer.
+  _onContextRestored() {
+    console.warn('WebHud: GL context restored');
+    try { this.egoEnv.dispose(); } catch (e) { /* the lost target may already be gone */ }
+    this.egoEnv = studioEnvironment(this.renderer);
+    this._lightEgo(this.ego);
+    this.resize();
+    this.contextLost = false;
+  }
+
   // factory paint code and wheel option (models.js OCEAN_PAINTS / OCEAN_WHEELS)
   setEgoLook(paint, wheels) {
     this.egoLook = { paint, wheels };
@@ -628,7 +656,7 @@ export class CarScene {
   }
 
   // the full resolution is the device's pixel ratio, at most 1.75
-  _pixelRatio() { return Math.min(window.devicePixelRatio || 1, 1.75) * this.renderScale; }
+  _pixelRatio() { return Math.min(window.devicePixelRatio || 1, MAX_DPR) * this.renderScale; }
 
   setRenderScale(k) {
     this.renderScale = k;

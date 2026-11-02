@@ -20,6 +20,8 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.content.ComponentCallbacks2
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
@@ -203,6 +205,16 @@ class MainActivity : Activity(), Link.Listener, Infotainment.Listener, CanBridge
         web?.onPause()
         web?.pauseTimers()
         super.onStop()
+    }
+
+    // Android warns of memory pressure before the system forces our GL context down (the board's GPU is shared with
+    // Pulse's own app). Pass the warning to the page so it can shed GPU memory -- drop the 3D view to its lowest
+    // resolution -- ahead of that. See main.onMemoryPressure / perf.js shed().
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            web?.evaluateJavascript("window.dispatchEvent(new CustomEvent('webhud:memory',{detail:{level:$level}}))", null)
+        }
     }
 
     override fun onDestroy() {
@@ -409,6 +421,19 @@ class MainActivity : Activity(), Link.Listener, Infotainment.Listener, CanBridge
     }
 
     private inner class Chrome : WebChromeClient() {
+        // Forward the page's warnings and errors to logcat under this tag, so `adb logcat -s WebHud` shows them
+        // on the car without chrome://inspect -- in particular the GL context lost / restored lines, which tell a
+        // blank screen (a dropped context) apart from a crashed renderer (onRenderProcessGone above).
+        override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+            val where = "${message.sourceId()}:${message.lineNumber()}"
+            when (message.messageLevel()) {
+                ConsoleMessage.MessageLevel.ERROR -> Log.e(TAG, "page: ${message.message()} ($where)")
+                ConsoleMessage.MessageLevel.WARNING -> Log.w(TAG, "page: ${message.message()} ($where)")
+                else -> {}
+            }
+            return true
+        }
+
         // Playback → upload a log
         override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
             fileCallback?.onReceiveValue(null)

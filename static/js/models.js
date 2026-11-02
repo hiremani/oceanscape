@@ -4,6 +4,7 @@
 // matching the ADAS/openpilot convention (distances measured from the front bumper).
 import * as THREE from '../vendor/three.module.min.js';
 import { GLTFLoader } from '../vendor/GLTFLoader.js';
+import { MeshoptDecoder } from '../vendor/meshopt_decoder.module.js';
 import { mergeGeometries, deinterleaveAttribute } from '../vendor/BufferGeometryUtils.js';
 import { Lamp, LAMP } from './lamps.js';
 
@@ -286,7 +287,8 @@ const INTERIOR = /^(Seat_(FL|FR|Rear)$|Dash_Vents$|Center_Screen$|Driver_Display
 
 export function loadEgoModel(url) {
   return new Promise((resolve, reject) => {
-    new GLTFLoader().load(url, (gltf) => {
+    // the model is meshopt-compressed (tools/compress_model.sh): ~3x smaller to load and quantized smaller in VRAM
+    new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load(url, (gltf) => {
       const model = gltf.scene;
       model.rotation.y = Math.PI / 2;
       model.updateMatrixWorld(true);
