@@ -124,6 +124,23 @@ describe('WorldModel', () => {
     assert.ok(Math.abs(o.y - (10.0 - 8.0 * 1.5)) < 0.6);     // predicted to now, past the fusion delay
   });
 
+  test('a camera-only car (no velocity source) holds a steady heading despite position noise', () => {
+    // a car 30 m ahead driving straight away at 10 m/s, seen only by the ADAS list (no radar/op here), with the
+    // camera's lateral and range noise added. Its drawn heading must not swing on that noise (it drives straight).
+    const see = (t) => {
+      const x = 30.0 + 10.0 * t + 0.4 * Math.sin(t * 5.0);   // range noise
+      const y = 0.0 + 0.5 * Math.sin(t * 7.0);               // lateral noise -> noisy inferred vy
+      return [adasMeasurement(t + 0.12, { id: 5, x, y, cls: 'car', w: 1.9, l: 4.7, h: 1.5 })];
+    };
+    const snaps = drive(3.0, 0.0, 0.0, see, 0.01, 0.05);
+    const last = snaps.slice(-25).map(([, objs]) => objs[0]).filter(Boolean);
+    let maxStep = 0;
+    for (let i = 1; i < last.length; i++) maxStep = Math.max(maxStep, Math.abs(last[i].heading - last[i - 1].heading));
+    const maxHead = Math.max(...last.map(o => Math.abs(o.heading)));
+    assert.ok(maxStep < 2.5, `heading step ${maxStep.toFixed(2)} deg`);   // no frame-to-frame nose-swing
+    assert.ok(maxHead < 10, `heading ${maxHead.toFixed(2)} deg off straight`);
+  });
+
   test('paused time takes everything', () => {
     // right after a seek a paused replay asks again and again for the same moment: the camera's
     // latest reading (newer than the fusion delay) must still get in

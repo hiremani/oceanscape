@@ -73,7 +73,13 @@ const COAST_STATIONARY_S = 2.5;    // ...longer when it stands still (e.g. parke
 const STATIONARY_SPEED = 0.7;      // m/s over ground
 const CONFIRM_UPDATES = 3;         // a radar-only track is shown after this many measurements...
 const CONFIRM_SPAN_S = 0.15;       // ...spanning at least this long
-const HEADING_FROM_MOTION = 1.5;   // m/s: faster than this, an object points where it's going
+const HEADING_FROM_MOTION = 1.5;   // m/s: faster than this, an object points where it's going...
+const HEADING_VEL_SIGMA_K = 1.5;   // ...and only if its speed is at least this many sigma above the velocity noise,
+                                   // so a car isn't turned by noise in a velocity-less (camera-only) track
+const HEADING_SMOOTH_S = 0.5;      // the output heading eases toward its target over this (data time): no nose-swing
+const VEL_SMOOTH_S = 0.6;          // a track with no velocity-measuring source (camera only, no radar/op) has its
+                                   // output velocity eased over this, so it doesn't slide on differenced-position noise
+const OUT_RESET_S = 1.0;           // an output gap longer than this restarts the eased heading/velocity at the target
 const SOURCE_GONE_S = 5.0;         // a source silent this long no longer counts as available
 
 // confidence (see above); the view fades objects in between about 0.35 and 0.65
@@ -347,6 +353,8 @@ class Track {
     this.conf = 0.0;
     this.confT = t;
     this.confWhy = '';
+    this.hout = null;      // eased output heading (world, rad), and eased output velocity for velocity-less tracks
+    this.houtSrc = null; this.voutx = null; this.vouty = null; this.outT = null;
   }
 
   get lastT() {
@@ -707,12 +715,36 @@ export class WorldModel {
       const dt = now - tr.t;
       const wx = tr.X[0] + tr.X[2] * dt, wy = tr.X[1] + tr.X[3] * dt;
       const [x, y] = toEgo(pose, wx, wy);
-      const [vx, vy] = matvec(Rt, [tr.X[2], tr.X[3]]);
-      const speed = tr.speed();
-      let heading, hsrc;
-      if (speed > HEADING_FROM_MOTION) { heading = Math.atan2(tr.X[3], tr.X[2]) - h; hsrc = 'motion'; }
-      else if (tr.heading !== null) { heading = tr.heading - h; hsrc = RANK_SRC[tr.headingRank]; }
-      else { heading = 0.0; hsrc = null; }
+      const odt = tr.outT == null ? Infinity : Math.max(0, now - tr.outT);
+      const reset = odt > OUT_RESET_S;
+
+      // Output velocity (world frame). A track with no velocity-measuring source (the camera-only ADAS list, no radar
+      // or openpilot lead) has its velocity inferred by differencing noisy camera positions; ease it so the drawn car
+      // doesn't slide and lurch. A radar/op-backed track keeps its measured velocity as is.
+      const hasVsrc = 'radar' in tr.sources || 'op' in tr.sources;
+      let wvx = tr.X[2], wvy = tr.X[3];
+      if (!hasVsrc) {
+        if (tr.voutx == null || reset) { tr.voutx = wvx; tr.vouty = wvy; }
+        else { const a = 1 - Math.exp(-odt / VEL_SMOOTH_S); tr.voutx += (wvx - tr.voutx) * a; tr.vouty += (wvy - tr.vouty) * a; }
+        wvx = tr.voutx; wvy = tr.vouty;
+      }
+      const [vx, vy] = matvec(Rt, [wvx, wvy]);
+      const speed = hypot(wvx, wvy);
+
+      // Output heading, eased toward its target so a car doesn't swing its nose on velocity noise. It points where it
+      // moves only when its speed is clearly above the velocity noise (velocity-less tracks rarely qualify); otherwise
+      // it keeps the source-reported heading, or holds the last one.
+      const velSigma = Math.sqrt(Math.max(tr.P[2][2], tr.P[3][3], 0));
+      let targetW, hsrc;
+      if (speed > HEADING_FROM_MOTION && speed > HEADING_VEL_SIGMA_K * velSigma) { targetW = Math.atan2(wvy, wvx); hsrc = 'motion'; }
+      else if (tr.heading !== null) { targetW = tr.heading; hsrc = RANK_SRC[tr.headingRank]; }
+      else { targetW = tr.hout == null ? h : tr.hout; hsrc = tr.hout == null ? null : 'held'; }
+      // ease within a source (kills frame-to-frame nose-swing); snap on a source change (a genuine turn-to-face)
+      if (tr.hout == null || reset || hsrc !== tr.houtSrc) tr.hout = targetW;
+      else tr.hout += wrap(targetW - tr.hout) * (1 - Math.exp(-odt / HEADING_SMOOTH_S));
+      tr.houtSrc = hsrc;
+      tr.outT = now;
+      const heading = tr.hout - h;
       const sxy = matmul(matmul(Rt, block(tr.P, 0, 2, 0, 2)), transpose(Rt));
       const sources = Object.keys(tr.sources).sort((a, b) => SOURCE_RANK[a] - SOURCE_RANK[b])
         .filter(src => now - tr.sources[src].t < COAST_STATIONARY_S + 1)
