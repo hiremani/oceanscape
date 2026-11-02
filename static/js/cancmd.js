@@ -11,6 +11,7 @@
 // A frame starts from every signal's initial value (what the matrix says an untouched signal carries,
 // "Inactive"/"No request"), so one frame asks for one thing.
 import { TX_MESSAGES } from './ibus_tables.js';
+import { nextFrame } from './e2e.js';
 
 const EVENT_REPEAT = 3, EVENT_GAP_MS = 20;   // the matrix: Nr. of repetitions 3, delay 20 ms
 const PULSE_REPEAT = 3;                      // cycles a cyclic request is held before the idle frame
@@ -130,8 +131,37 @@ export class CarCommands {
     if (id === undefined) return;
     clearInterval(id);
     this.holds.delete(addr);
-    this._send(addr, encode(addr), 2, HOLD_MS);   // the idle frame: nothing requested
+    // the idle frame for a message the HUD owns a template for (seat, liftgate...). A trial message (0x610, 0x336...)
+    // isn't one of those: stopping is enough, the head unit's own cyclic frames take over again.
+    if (BY_ADDR.has(addr)) this._send(addr, encode(addr), 2, HOLD_MS);
   }
 
   releaseAll() { for (const addr of [...this.holds.keys()]) this.release(addr); }
+
+  /** Send a raw 8-byte frame on `bus`, addr (the control trial: a copy of the head unit's frame). */
+  _sendRaw(bus, addr, bytes) {
+    let err;
+    try { err = window.WebHudApp.canSend(JSON.stringify({ bus, addr, data: hex(bytes), repeat: 1, gapMs: HOLD_MS })); }
+    catch (e) { err = String(e); }
+    if (err) { this.lastError = err; this.app.toast(`Not sent: ${err}`); return false; }
+    return true;
+  }
+
+  /** The control trial (settings.js "Unlock controls", parked only): change one field of the head unit's own
+   *  control message and send it back. `values` is [[signalDef, raw], ...]; `e2e` recomputes the checksum and
+   *  alive counter (e2e.js). The head unit's latest frame is copied and modified, so its other fields are kept,
+   *  and the modified frame is sent densely for `ms` so it outweighs the head unit's own cyclic frames. */
+  trial(bus, addr, values, e2e = false, ms = 1500) {
+    if (!this.available) { this.app.toast(this.why); return false; }
+    const cs = this.app.carState;
+    const build = () => { const cur = cs.frameBytes(bus, addr); return cur ? nextFrame(cur, values, e2e) : null; };
+    if (!build()) { this.app.toast('Waiting for the head unit to send this message'); return false; }
+    this.release(addr);
+    const send = () => { const b = build(); if (b) this._sendRaw(bus, addr, b); };
+    send();
+    const id = setInterval(send, 50);
+    this.holds.set(addr, id);
+    setTimeout(() => { if (this.holds.get(addr) === id) this.release(addr); }, ms);
+    return true;
+  }
 }

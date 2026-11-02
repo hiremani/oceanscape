@@ -758,3 +758,77 @@ export function liveExtras(cs) {
   if (cs.rawOf('BCM_DrFrntDoorSts') !== undefined) out['doors.open'] = doors;
   return out;
 }
+
+// ---- the control trial (settings.js "Unlock controls", carcontrols.js) --------------------------------
+// Which head unit message and field each greyed control writes, so a parked trial can send it (cancmd.js
+// `trial`): { bus, addr, e2e (checksum + alive counter), build(value) -> [[signalDef, raw], ...] }. The field
+// bit positions are the FM29 matrix's (dbc/fisker_ocean_ibus.dbc). Many encodings are best-guesses to verify on
+// the car one by one (the point of the trial): where the request enum and the feedback enum differ, or a toggle
+// stands in for a multi-value signal, the comment says so. Audio (0x44/0x46) is deliberately absent: one frame
+// carries every volume with nothing to copy, so it stays greyed.
+const sig = (start, len) => ({ start, len });
+const tSeg = (bus, addr, start, len, e2e = false) => ({ bus, addr, e2e, build: (v) => [[sig(start, len), v | 0]] });              // the option's value is the raw
+const tTog = (bus, addr, start, len, on, off, e2e = false) => ({ bus, addr, e2e, build: (v) => [[sig(start, len), v ? on : off]] });
+const tFn = (bus, addr, e2e, build) => ({ bus, addr, e2e, build });
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+export const TRIAL = {
+  // drive mode and energy: ICC_0x610 (plain, 1000 ms)
+  'drive.mode': tFn('IBUS1', 0x610, false, (v) => [[sig(42, 3), { earth: 0, fun: 1, hyper: 2, snow: 4, offroad: 5 }[v] ?? 1]]),   // ICC_DrvModSig (Eco/Normal/Sport/Snow/Offroad)
+  'drive.regen': tFn('IBUS1', 0x610, false, (v) => [[sig(54, 2), { low: 0, medium: 1, high: 2 }[v] ?? 1]]),                        // ICC_RegenLvl — request enum may be Off/Normal/High; verify
+  'drive.creep': tTog('IBUS1', 0x610, 9, 2, 2, 1),                                                                                 // ICC_EPedlSts: on = Creep(2), off = Roll(1)
+  'drive.accel': tFn('IBUS1', 0x610, false, (v) => [[sig(11, 2), { low: 0, medium: 1, high: 2 }[v] ?? 1]]),                        // ICC_AccelMod
+  'energy.limit': tFn('IBUS1', 0x610, false, (v) => [[sig(62, 7), clamp(v | 0, 0, 100)]]),                                         // ICC_SetChrgEndSOC (%)
+  'energy.charging': tFn('IBUS1', 0x610, false, (v) => v ? [[sig(63, 1), 1]] : [[sig(39, 1), 1]]),                                 // ICC_StartChrgBtn / ICC_StopChrgBtn
+
+  // units, V2L, terrain, brightness: ICC_0x529 (plain, 100 ms)
+  'energy.v2l': tTog('IBUS1', 0x529, 22, 1, 1, 0),                                                                                 // ICC_V2L_ChrgPortEna
+  'drive.terrain': tTog('IBUS1', 0x529, 44, 3, 2, 1),                                                                             // ICC_SpclTerrainModReq: on = Snow(2), off = All-terrain-OFF(1); verify
+  'display.bright': tFn('IBUS1', 0x529, false, (v) => [[sig(11, 4), clamp(Math.round(v / 10) - 1, 0, 15)]]),                       // ICC_BackgndBriLvl (level 0..15, inverse of (r+1)*10)
+
+  // ambient, steering feel, ESP, hill descent, California: ICC_0x336 (E2E, 100 ms)
+  'light.ambient': tTog('IBUS1', 0x336, 20, 1, 1, 0, true),                                                                        // ICC_AtmLampOpenCmd
+  'light.ambientLevel': tFn('IBUS1', 0x336, true, (v) => [[sig(15, 4), clamp(Math.round(v / 100 * 9), 0, 9)]]),                    // ICC_SetAtmLampBri (Level_1..10 = 0..9)
+  'drive.steer': tFn('IBUS1', 0x336, true, (v) => [[sig(23, 3), { comfort: 2, standard: 1, sport: 3 }[v] ?? 1]]),                  // ICC_SteerAssiSet (Normal/ECO/Sport); comfort->ECO, verify
+  'drive.traction': tTog('IBUS1', 0x336, 29, 1, 0, 1, true),                                                                       // ICC_ESPSwtSig: TC on = Normal(0), off = Sport(1)
+  'drive.hdc': tTog('IBUS1', 0x336, 28, 1, 1, 0, true),                                                                            // ICC_HDCSwtSig (momentary press)
+
+  // the 41 driver-assistance settings: ICC_0x52A and ICC_0x35B (0x52A E2E, 0x35B plain, both 200 ms)
+  'icc.global': tTog('IBUS2', 0x52A, 28, 1, 0, 1, true),                                                                           // ICC_ActvStyGlblSetting (0 = On)
+  'icc.accType': tSeg('IBUS2', 0x52A, 39, 3, true),                                                                                // ICC_ACCFuncTyp
+  'icc.gap': tSeg('IBUS2', 0x52A, 15, 3, true),                                                                                    // ICC_UsrProfTiGapSet
+  'icc.step': tSeg('IBUS2', 0x52A, 36, 1, true),                                                                                   // ICC_ACCSpdStepSize
+  'icc.lka': tSeg('IBUS2', 0x52A, 17, 2, true),                                                                                    // ICC_LKA_Setting
+  'icc.elka': tTog('IBUS2', 0x52A, 31, 1, 1, 0, true),                                                                             // ICC_ELKASteeringInterventionSet
+  'icc.esa': tTog('IBUS2', 0x52A, 30, 1, 1, 0, true),                                                                              // ICC_ESA_Setting
+  'icc.trajectory': tTog('IBUS2', 0x52A, 32, 1, 1, 0, true),                                                                       // ICC_LaneTrajectorySetting
+  'icc.facm': tSeg('IBUS2', 0x52A, 19, 2, true),                                                                                   // ICC_FACM_Setting
+  'icc.aebSens': tSeg('IBUS2', 0x52A, 21, 2, true),                                                                                // ICC_AEB_Sensitivity
+  'icc.dynSens': tTog('IBUS2', 0x52A, 12, 1, 0, 1, true),                                                                          // ICC_FACM_DynmcSenstvty (0 = On)
+  'icc.jerk': tTog('IBUS2', 0x52A, 27, 2, 1, 0, true),                                                                             // ICC_AEB_JerkSetReq
+  'icc.bacm': tSeg('IBUS2', 0x52A, 23, 2, true),                                                                                   // ICC_BACM_Setting
+  'icc.bacmSens': tSeg('IBUS2', 0x52A, 25, 2, true),                                                                               // ICC_BACM_Sensitivity
+  'icc.fcta': tSeg('IBUS2', 0x52A, 63, 2, true),                                                                                   // ICC_FCTA_Setting
+  'icc.fctaSens': tSeg('IBUS2', 0x52A, 57, 2, true),                                                                               // ICC_FCTA_Sensitivity
+  'icc.tsr': tTog('IBUS2', 0x52A, 29, 1, 1, 0, true),                                                                              // ICC_TSR_Setting
+  'icc.isa': tSeg('IBUS2', 0x52A, 54, 3, true),                                                                                    // ICC_ISASetting
+  'icc.tlr': tSeg('IBUS2', 0x52A, 61, 3, true),                                                                                    // ICC_TLR_Setting
+  'icc.lcAssist': tTog('IBUS2', 0x35B, 31, 1, 1, 0),                                                                               // ICC_EnbLnChgAsst
+  'icc.vibrate': tTog('IBUS2', 0x35B, 53, 1, 1, 0),                                                                                // ICC_SteerWhlVibrSet
+  'icc.lkaWarn': tSeg('IBUS2', 0x35B, 57, 2),                                                                                      // ICC_LKA_SettingWrnTyp
+  'icc.bsd': tSeg('IBUS2', 0x35B, 33, 2),                                                                                          // ICC_BSDSetting
+  'icc.bsdSens': tSeg('IBUS2', 0x35B, 63, 2),                                                                                      // ICC_BSD_Sensitivity
+  'icc.dow': tSeg('IBUS2', 0x35B, 35, 2),                                                                                          // ICC_DOW_Setting
+  'icc.warnType': tSeg('IBUS2', 0x35B, 55, 2),                                                                                     // ICC_WarnTypeSetting
+  'icc.dcaa': tTog('IBUS2', 0x35B, 37, 2, 1, 0),                                                                                   // ICC_DCAASetting
+  'icc.apa': tTog('IBUS2', 0x35B, 39, 2, 2, 0),                                                                                    // ICC_APA_Setting (2 = Enabled)
+  'icc.parkIn': tSeg('IBUS2', 0x35B, 45, 1),                                                                                       // ICC_APAParkInDirSetting
+  'icc.parkOut': tSeg('IBUS2', 0x35B, 46, 1),                                                                                      // ICC_APAParkOutDirSetting
+  'icc.rap': tTog('IBUS2', 0x35B, 59, 2, 1, 0),                                                                                    // ICC_RAP_Setting
+  'icc.tp': tTog('IBUS2', 0x35B, 61, 2, 1, 0),                                                                                     // ICC_TP_Setting
+  'icc.curb': tSeg('IBUS2', 0x35B, 49, 2),                                                                                         // ICC_WSPPA_Setting
+  'icc.chime': tTog('IBUS2', 0x35B, 47, 1, 1, 0),                                                                                  // ICC_ParkAsstChmAlrt
+  'icc.autoView': tTog('IBUS2', 0x35B, 19, 1, 1, 0),                                                                              // ICC_AutomaticViewReq
+  'icc.overlay': tTog('IBUS2', 0x35B, 21, 1, 1, 0),                                                                                // ICC_GraphicOverlayReq
+  'light.ahb': tTog('IBUS2', 0x35B, 50, 1, 1, 0),                                                                                  // ICC_AHBA_Setting
+};

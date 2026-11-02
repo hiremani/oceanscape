@@ -507,6 +507,14 @@ export class Settings {
         'outnumber the head unit\'s own idle frames of the same message. Watch Seats › From the car (the switch and head unit rows) and ' +
         'Signals › IBUS1 › 0x533 while trying. Parked only.'),
       this.app.segmented([['off', 'Off'], ['100', 'Every 100 ms'], ['25', 'Every 25 ms']], s.seatTrial || 'off', v => set('seatTrial', v))));
+    body.append(el('div.section', el('h3', 'Unlock controls (parked trial)'),
+      el('p.desc', 'Un-greys the car controls that send the head unit\'s own message: drive mode, regen, creep, brightness, ' +
+        'ambient light, California Mode, charging, V2L, and the driver-assistance settings. Setting one copies the head unit\'s ' +
+        'current frame, changes that field (and, for the counter-protected messages, continues the alive counter and fixes the ' +
+        'checksum), and sends it for about a second. The head unit re-sends its own value every cycle, so a change may be undone ' +
+        'at once; watch the control\'s "From the car" row to see whether the car acted on it. Parked only (gear P). Each control\'s ' +
+        'encoding is a best guess to confirm here one by one. Audio stays greyed (its message has no value to copy). Off by default.'),
+      this.app.switch(s.controlTrial === true, v => set('controlTrial', v))));
     body.append(el('div.section', el('h3', 'Render resolution'),
       el('p.desc', 'The 3D view\'s resolution, as a share of the screen\'s. While frames come slower than the screen refreshes, Auto ' +
         'first drops the blur behind the HUD\'s cards, then steps the resolution down (to 60%), and brings them back once frames keep up. ' +

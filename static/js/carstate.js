@@ -56,6 +56,7 @@ export class CarState {
     this.raw = new Map();     // signal name -> raw integer
     this.at = new Map();      // signal name -> performance.now() when last decoded
     this.msgAt = new Map();   // bus/addr -> when that message last arrived
+    this.bytes = new Map();   // bus/addr -> the last raw 8 bytes (for the control trial, which copies them)
     this.demo = null;
     window.addEventListener('webhud:can', (e) => { if (!this.demo) this.feed(e.detail); });
     this.apply();
@@ -64,7 +65,7 @@ export class CarState {
   apply() {
     const on = this.app.settings.demoCarState;
     if (on && !this.demo) this.demo = new Demo(this);
-    else if (!on && this.demo) { this.demo = null; this.raw.clear(); this.at.clear(); this.msgAt.clear(); this._pull(); }
+    else if (!on && this.demo) { this.demo = null; this.raw.clear(); this.at.clear(); this.msgAt.clear(); this.bytes.clear(); this._pull(); }
     else this._pull();
   }
 
@@ -87,12 +88,18 @@ export class CarState {
       const bytes = hexBytes(f.data);
       if (bytes.length < 1) continue;
       this.msgAt.set(f.bus + '/' + f.addr, now);
+      if (bytes.length === 8) this.bytes.set(f.bus + '/' + f.addr, bytes);
       for (const s of msg.signals) {
         if ((s.start >> 3) >= bytes.length) continue;
         this.raw.set(s.name, extract(bytes, s));
         this.at.set(s.name, now);
       }
     }
+  }
+
+  // the last raw 8 bytes of message (bus, addr) if it's arriving now, else undefined (control trial)
+  frameBytes(bus, addr, maxAgeMs = STALE_MS) {
+    return this.live(bus, addr, maxAgeMs) ? this.bytes.get(bus + '/' + addr) : undefined;
   }
 
   // raw integer of a signal, or undefined if we've never decoded it (or it's gone stale)

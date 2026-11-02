@@ -203,6 +203,21 @@ the gateway broadcasts there and forwards every frame to the page (see
   the head unit sends it: *Signals → IBUS1*) and the seat's switch states (DSMC_0x4F1), shown in *Seats →
   From the car*, and *Debug → Seat move trial* un-greys the adjusters and sends the request every 100 ms
   or every 25 ms (ours outnumbering the head unit's idle frames) for a parked test.
+  **Control trial.** *Settings → Debug → Unlock controls* (off by default, the owner's choice to relax the
+  rule in CLAUDE.md against sending the head unit's own messages) un-greys every greyed control that has a
+  CAN message behind it: drive mode, regen, creep, accelerator, brightness, ambient light and level,
+  steering feel, traction/ESP, hill descent, California Mode, charge limit, start/stop charging, V2L,
+  special terrain, Hollywood Mode, and the 41 driver-assistance settings. Setting one reads the head
+  unit's latest frame for that message (`carState.frameBytes`, which is why `ICC_0x610`, `0x529`, `0x336`,
+  `0x563` were added to the read set alongside `0x52A`/`0x35B`), changes the one field, and for the
+  counter-protected messages (`0x336`, `0x52A`, `0x563`) continues the 4-bit alive counter and recomputes
+  the byte-0 checksum (`static/js/e2e.js`: CRC-8 J1850, applied as a data-id-free XOR delta from the head
+  unit's frame, the same trick as the sunnypilot ICC spoof). The modified frame is sent every 50 ms for
+  about a second (`cancmd.js` `trial`), so it outweighs the head unit's own cyclic frames; the head unit
+  keeps sending its value, so a change may be undone at once, which the control's *From the car* row shows.
+  Parked only (gear P). The map from control to message, field and encoding is `carcatalog.js` `TRIAL`;
+  several encodings are best guesses to confirm on the car one at a time. Audio (`0x44`/`0x46`) stays
+  greyed and off the send allowlist: one frame carries every volume with nothing to copy.
 
 Pulse's CAN driver has hardware acceptance filters (`/sys/module/mcp251x/parameters/rxb_*`) whose
 defaults pass only parts of the ID range and would keep the seat and mirror positions, the liftgate's,

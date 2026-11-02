@@ -76,9 +76,12 @@ test('a frame built for sending decodes to what was asked, the rest at its initi
 test('the helper lists cover every table message and only the head unit\'s control messages are sendable', () => {
   for (const msg of RX_MESSAGES) assert.ok(RX_IDS[msg.bus].includes(msg.addr), msg.name);
   for (const msg of TX_MESSAGES) assert.ok(TX_IDS[msg.bus].includes(msg.addr), msg.name);
-  for (const addr of TX_IDS.IBUS1) assert.ok(ibus.messages.get(addr).transmitter === 'ICC', `0x${addr.toString(16)} is the head unit's`);
-  assert.ok(!TX_IDS.IBUS1.includes(0x610) && !TX_IDS.IBUS1.includes(0x336) && !TX_IDS.IBUS1.includes(0x529));
-  assert.deepEqual(TX_IDS.IBUS2, []);
+  for (const addr of [...TX_IDS.IBUS1, ...TX_IDS.IBUS2]) assert.ok(ibus.messages.get(addr).transmitter === 'ICC', `0x${addr.toString(16)} is the head unit's`);
+  // the cyclic state and driver-assistance messages are sendable for the parked control trial (carcatalog.js TRIAL);
+  // the audio messages never are (one frame carries every volume with nothing to copy, so sending resets the audio)
+  for (const addr of [0x610, 0x336, 0x529, 0x563]) assert.ok(TX_IDS.IBUS1.includes(addr), `0x${addr.toString(16)} sendable for the trial`);
+  assert.deepEqual(TX_IDS.IBUS2, [0x52A, 0x35B]);
+  assert.ok(!TX_IDS.IBUS1.includes(0x44) && !TX_IDS.IBUS1.includes(0x46), 'audio messages never sendable');
 });
 
 test('bit extraction handles signals that span bytes and signed ones', () => {

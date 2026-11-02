@@ -58,7 +58,10 @@ RX = {
             0x578, 0x579, 0x57A, 0x57B, 0x57C,
             # the driver's seat switches as the seat module reports them, and the head unit's own seat-move message
             # (ICC_0x533, which it is specified to send every 100 ms): to see why a seat move of ours does nothing
-            0x4F1, 0x533],
+            0x4F1, 0x533,
+            # the head unit's own control messages, read so the control trial (settings.js) can copy a frame, change
+            # one field, continue its alive counter and fix its checksum, and send that back (0x52A/0x35B are IBUS2, below)
+            0x610, 0x529, 0x336, 0x563],
   "IBUS2": [0xE9, 0x236, 0x321, 0x363, 0x369, 0x503, 0x504, 0x505, 0x580, 0x5A4, 0x630, 0x634, 0x641, 0x35B, 0x52A,
             # the telematics box's GPS position and altitude, and the head unit's ADASIS map horizon (pose.js, map matching)
             0x525, 0x526, 0x250, 0x251, 0x252, 0x255, 0x361, 0x362,
@@ -67,16 +70,23 @@ RX = {
             0x2DF, 0x2E2, 0x2E5, 0x2E8, 0x2E9, 0x2EA, 0x311, 0x313, 0x314, 0x315, 0x316, 0x317, 0x31A, 0x31B, 0x31C, 0x32B, 0x32D, 0x32F,
             0x334, 0x339, 0x33B, 0x33D, 0x33F, 0x340, 0x342, 0x34B, 0x34D, 0x34F, 0x350, 0x351, 0x352, 0x353, 0x356, 0x359, 0x527],
 }
-# What the app may send: the head unit's own control messages that it sends only when the driver touches
+# What the app may send. Most are the head unit's own control messages that it sends only when the driver touches
 # something (OnWriteWithRepetition) or, for 0x528/0x533/0x52, sends cyclically with "no request" values in
-# between, so a request of ours is acted on like a touch. Never the cyclic state messages the head unit
-# owns (0x610 drive mode and charging, 0x529 units and brightness, 0x336 ambient and California Mode: the
-# head unit would send its own values right back, and 0x336 carries an E2E counter we can't continue). Nor
-# 0x46 or 0x44: one frame of those carries every audio volume, the mute and the equalizer at once, with no
-# "no request" value and no feedback to copy the current ones from, so any request in them resets the audio.
+# between, so a request of ours is acted on like a touch.
+#
+# The rest (0x610, 0x529, 0x336, 0x563 on IBUS1; 0x52A, 0x35B on IBUS2) are the cyclic state messages the head
+# unit owns -- drive mode, charging, brightness, ambient, California Mode, the screen rotation and the driver-
+# assistance settings. The head unit re-sends its own value every cycle, so a request of ours is undone unless the
+# car latches it; 0x336/0x52A/0x563 also carry an E2E checksum and alive counter. They are here for the parked
+# "control trial" (settings.js, carcatalog.js TRIAL), which copies the head unit's latest frame, changes one
+# field, continues the counter and fixes the checksum (e2e.js), and sends it densely to see whether the car acts
+# on it at all. This relaxes the old rule against sending these, by the owner's choice; the UI keeps the trial off
+# by default, parked only, and nothing sends them otherwise. Still never 0x44/0x46: one frame carries every audio
+# volume, the mute and the equalizer at once, with no feedback to copy the current values from, so sending one
+# resets the audio.
 TX = {
-  "IBUS1": [0x4E, 0x530, 0x534, 0x90, 0x528, 0x533, 0x52],
-  "IBUS2": [],
+  "IBUS1": [0x4E, 0x530, 0x534, 0x90, 0x528, 0x533, 0x52, 0x610, 0x529, 0x336, 0x563],
+  "IBUS2": [0x52A, 0x35B],
 }
 # the read-out table leaves the ADAS mirror to the world decoder (it has the ADAS DBC for those)
 READOUT_SKIP_PREFIX = "ADAS_"

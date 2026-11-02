@@ -362,6 +362,44 @@ export const RX_MESSAGES = [
     { name: 'DSMC_DrvrSeatHeiPosn', start: 47, len: 8, res: 1, off: 0, init: 0 },
     { name: 'DSMC_DrvrSeatBackPosn', start: 55, len: 8, res: 1, off: 0, init: 0 },
   ]},
+  // the head unit's own control messages, read so the control trial (settings.js) can copy and modify them,
+  // and so the Signals tab shows them: ICC_0x336, 0x52A and 0x563 carry an 8-bit checksum (byte 0) and a 4-bit
+  // alive counter (byte 1); 0x610, 0x529 and 0x35B are plain. (0x52A and 0x35B are already decoded below.)
+  { bus: 'IBUS1', addr: 0x610, name: 'ICC_0x610', cycleMs: 1000, signals: [
+    { name: 'ICC_EPedlSts', start: 9, len: 2, res: 1, off: 0, init: 0, enum: {0: "OnePedalDrive", 1: "Roll", 2: "Creep", 3: "Invalid"} },
+    { name: 'ICC_AccelMod', start: 11, len: 2, res: 1, off: 0, init: 0, enum: {0: "Low", 1: "Medium", 2: "High", 3: "Invalid"} },
+    { name: 'ICC_DrvModSig', start: 42, len: 3, res: 1, off: 0, init: 0, enum: {0: "Eco", 1: "Normal", 2: "Sport", 3: "Custom", 4: "Snow", 5: "Offroad", 6: "Valet", 7: "Invalid"} },
+    { name: 'ICC_SetACChrgLmtCrt', start: 49, len: 2, res: 1, off: 0, init: 0, enum: {0: "Invalid", 1: "Lvl1", 2: "Lvl2", 3: "Lvl3"} },
+    { name: 'ICC_RegenLvl', start: 54, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Normal", 2: "High", 3: "Invalid"} },
+    { name: 'ICC_SetChrgEndSOC', start: 62, len: 7, res: 1, off: 0, init: 0 },
+    { name: 'ICC_StartChrgBtn', start: 63, len: 1, res: 1, off: 0, init: 0, enum: {0: "No_action", 1: "Start_charging"} },
+    { name: 'ICC_StopChrgBtn', start: 39, len: 1, res: 1, off: 0, init: 0, enum: {0: "No_action", 1: "Stop_charging"} },
+  ]},
+  { bus: 'IBUS1', addr: 0x529, name: 'ICC_0x529', cycleMs: 100, signals: [
+    { name: 'ICC_BackgndBriLvl', start: 11, len: 4, res: 1, off: 0, init: 0 },
+    { name: 'ICC_V2L_ChrgPortEna', start: 22, len: 1, res: 1, off: 0, init: 0, enum: {0: "No", 1: "Yes"} },
+    { name: 'ICC_V2L_TrEna', start: 23, len: 1, res: 1, off: 0, init: 0, enum: {0: "No", 1: "Yes"} },
+    { name: 'ICC_RollingCounter', start: 39, len: 5, res: 1, off: 0, init: 0 },
+    { name: 'ICC_SpclTerrainModReq', start: 44, len: 3, res: 1, off: 0, init: 0, enum: {0: "Initial", 1: "All_terrain_OFF", 2: "Snow", 3: "Mud", 4: "Sand"} },
+  ]},
+  { bus: 'IBUS1', addr: 0x336, name: 'ICC_0x336', cycleMs: 100, signals: [
+    { name: 'ICC_336_Checksum', start: 7, len: 8, res: 1, off: 0, init: 0 },
+    { name: 'ICC_336_AliveCounter', start: 11, len: 4, res: 1, off: 0, init: 0 },
+    { name: 'ICC_SetAtmLampBri', start: 15, len: 4, res: 1, off: 0, init: 0 },
+    { name: 'ICC_AtmLampOpenCmd', start: 20, len: 1, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "On"} },
+    { name: 'ICC_SteerAssiSet', start: 23, len: 3, res: 1, off: 0, init: 0, enum: {0: "Initial", 1: "Normal", 2: "ECO", 3: "Sport", 7: "Invalid"} },
+    { name: 'ICC_HDCSwtSig', start: 28, len: 1, res: 1, off: 0, init: 0, enum: {0: "No_Pressed", 1: "Pressed"} },
+    { name: 'ICC_ESPSwtSig', start: 29, len: 1, res: 1, off: 0, init: 0, enum: {0: "Normal", 1: "Sport"} },
+    { name: 'ICC_ReqCalifModHMIBtn', start: 31, len: 2, res: 1, off: 0, init: 0, enum: {0: "No_request", 1: "California_OFF", 2: "California_ON", 3: "Reserved"} },
+  ]},
+  { bus: 'IBUS1', addr: 0x563, name: 'ICC_0x563', cycleMs: 200, signals: [
+    { name: 'ICC_0x563_CheckSum', start: 7, len: 8, res: 1, off: 0, init: 0 },
+    { name: 'ICC_0x563_AliveCounter', start: 11, len: 4, res: 1, off: 0, init: 0 },
+    { name: 'ICC_CID_Pos_Learn', start: 14, len: 3, res: 1, off: 0, init: 0 },
+    { name: 'ICC_CID_Command_Valid', start: 15, len: 1, res: 1, off: 0, init: 0, enum: {0: "not_valid", 1: "valid"} },
+    { name: 'ICC_CID_Target_Position', start: 23, len: 8, res: 1.8, off: 0, init: 0 },
+    { name: 'ICC_CID_Rot_Speed', start: 31, len: 8, res: 1, off: -100, init: 0 },
+  ]},
   { bus: 'IBUS1', addr: 0x4F9, name: 'TBOX_0x4F9', cycleMs: 200, signals: [
     { name: 'TBOX_OTAResFb', start: 14, len: 3, res: 1, off: 0, init: 0, enum: {0: "OTA_no_request", 1: "OTA_on_going", 2: "OTA_completed", 3: "OTA_rollback_completed", 4: "OTA_error", 7: "Invalid"} },
     { name: 'TBOX_SpdLim', start: 23, len: 8, res: 1, off: 0, init: 0, enum: {255: "no_speed_limit"} },
@@ -906,8 +944,8 @@ export const TX_MESSAGES = [
 ];
 
 // What the app's CAN helper lets through (receive) and the only IDs it may send, per bus (CanIds.kt has the same).
-export const RX_IDS = { IBUS1: [0x112, 0x113, 0x114, 0x115, 0x150, 0x151, 0x1B8, 0x1C2, 0x234, 0x2F4, 0x2F5, 0x318, 0x333, 0x335, 0x343, 0x358, 0x364, 0x373, 0x378, 0x471, 0x4F3, 0x4F5, 0x4F9, 0x512, 0x518, 0x554, 0x5EA, 0x179, 0x46B, 0x46D, 0x46F, 0x472, 0x473, 0x578, 0x579, 0x57A, 0x57B, 0x57C, 0x4F1, 0x533], IBUS2: [0xE9, 0x236, 0x321, 0x363, 0x369, 0x503, 0x504, 0x505, 0x580, 0x5A4, 0x630, 0x634, 0x641, 0x35B, 0x52A, 0x525, 0x526, 0x250, 0x251, 0x252, 0x255, 0x361, 0x362, 0x117, 0x118, 0x1C0, 0x20A, 0x20B, 0x20C, 0x20D, 0x20E, 0x20F, 0x210, 0x2C7, 0x2CA, 0x2CD, 0x2D0, 0x2D3, 0x2D6, 0x2D9, 0x2DC, 0x2DF, 0x2E2, 0x2E5, 0x2E8, 0x2E9, 0x2EA, 0x311, 0x313, 0x314, 0x315, 0x316, 0x317, 0x31A, 0x31B, 0x31C, 0x32B, 0x32D, 0x32F, 0x334, 0x339, 0x33B, 0x33D, 0x33F, 0x340, 0x342, 0x34B, 0x34D, 0x34F, 0x350, 0x351, 0x352, 0x353, 0x356, 0x359, 0x527] };
-export const TX_IDS = { IBUS1: [0x4E, 0x530, 0x534, 0x90, 0x528, 0x533, 0x52], IBUS2: [] };
+export const RX_IDS = { IBUS1: [0x112, 0x113, 0x114, 0x115, 0x150, 0x151, 0x1B8, 0x1C2, 0x234, 0x2F4, 0x2F5, 0x318, 0x333, 0x335, 0x343, 0x358, 0x364, 0x373, 0x378, 0x471, 0x4F3, 0x4F5, 0x4F9, 0x512, 0x518, 0x554, 0x5EA, 0x179, 0x46B, 0x46D, 0x46F, 0x472, 0x473, 0x578, 0x579, 0x57A, 0x57B, 0x57C, 0x4F1, 0x533, 0x610, 0x529, 0x336, 0x563], IBUS2: [0xE9, 0x236, 0x321, 0x363, 0x369, 0x503, 0x504, 0x505, 0x580, 0x5A4, 0x630, 0x634, 0x641, 0x35B, 0x52A, 0x525, 0x526, 0x250, 0x251, 0x252, 0x255, 0x361, 0x362, 0x117, 0x118, 0x1C0, 0x20A, 0x20B, 0x20C, 0x20D, 0x20E, 0x20F, 0x210, 0x2C7, 0x2CA, 0x2CD, 0x2D0, 0x2D3, 0x2D6, 0x2D9, 0x2DC, 0x2DF, 0x2E2, 0x2E5, 0x2E8, 0x2E9, 0x2EA, 0x311, 0x313, 0x314, 0x315, 0x316, 0x317, 0x31A, 0x31B, 0x31C, 0x32B, 0x32D, 0x32F, 0x334, 0x339, 0x33B, 0x33D, 0x33F, 0x340, 0x342, 0x34B, 0x34D, 0x34F, 0x350, 0x351, 0x352, 0x353, 0x356, 0x359, 0x527] };
+export const TX_IDS = { IBUS1: [0x4E, 0x530, 0x534, 0x90, 0x528, 0x533, 0x52, 0x610, 0x529, 0x336, 0x563], IBUS2: [0x52A, 0x35B] };
 
 // The chips' hardware acceptance filters the app sets at start so every RX ID and the driver's defaults get through (see gen_ibus.py).
 export const HW_FILTERS = {

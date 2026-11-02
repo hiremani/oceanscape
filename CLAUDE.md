@@ -77,8 +77,8 @@ Do not edit these by hand. Change the generator and re-run it:
 
 This code sends frames to a real car.
 - Only IDs in `CanIds.TX` go out. The allowlist comes from `TX` in `gen_ibus.py` and is enforced in both `CanBridge.send` and the Go helper.
-- Do not send the head unit's cyclic state messages (drive mode, charging, units, brightness, ambient light, California Mode). The head unit overwrites them, and some carry an E2E counter.
-- Do not send the audio messages (`ICC_0x44`, `ICC_0x46`). One frame carries every volume and the mute.
+- The head unit's cyclic state messages (drive mode, charging, units, brightness, ambient light, California Mode: `ICC_0x610`, `0x529`, `0x336`, `0x563`) and the driver-assistance messages (`ICC_0x52A`, `0x35B`) are sent only by the **control trial** (Settings → Debug → Unlock controls), by the owner's choice, parked only and off by default. It copies the head unit's current frame, changes one field, continues the alive counter and fixes the checksum (`static/js/e2e.js`), so the rest of the frame is the head unit's own. The head unit overwrites these every cycle, so a change may not stick. Do not send any of them outside that trial path.
+- Never send the audio messages (`ICC_0x44`, `ICC_0x46`). One frame carries every volume, the mute and the equalizer at once, with nothing to copy the current values from, so a send resets the audio. These stay off the send allowlist.
 - The CAN chips' hardware filters are shared with Pulse's own app. `DRIVER_DEFAULTS` in `gen_ibus.py` keeps every ID the driver's defaults pass; do not narrow it.
 - A control that cannot send stays greyed with a reason (`off` in `carcatalog.js`), not hidden.
 - CAN overrides, SSH keys, replay and comma management jobs are refused while the car moves. Keep these guards.

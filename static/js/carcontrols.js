@@ -13,7 +13,7 @@
 // In a plain browser nothing is live and nothing is sent: the values live in this page (this.v).
 import * as THREE from '../vendor/three.module.min.js';
 import { $, $$, el, iconSvg, setClass, setText } from './util.js';
-import { CATEGORIES, DRIVE_MODES, SEAT_LIMITS, SEAT_MEMORY, MSG, defaults, liveControls, liveExtras } from './carcatalog.js';
+import { CATEGORIES, DRIVE_MODES, SEAT_LIMITS, SEAT_MEMORY, MSG, TRIAL, defaults, liveControls, liveExtras } from './carcatalog.js';
 import { ZONES, ANCHORS } from './cutaway.js';
 import { ApaMock, APA_SIGNALS } from './apamock.js';
 import { AppUpdate } from './appupdate.js';
@@ -300,6 +300,27 @@ export class CarControls {
   get showDemo() { return this.app.settings.carDemo === true; }
   /** The seat move trial (Settings > Debug): the ms between seat-move frames while a jog button is held, or 0 (off). */
   get seatTrial() { const v = this.app.settings.seatTrial; return v && v !== 'off' ? Number(v) || 0 : 0; }
+  /** The control trial (Settings > Debug): send greyed controls' own messages to the car, parked only. */
+  get controlTrial() { return this.app.settings.controlTrial === true && this.inApp; }
+  /** Whether a greyed control is un-greyed right now by the control trial (it has a trial mapping and the trial is on). */
+  trialOn(c) { return this.controlTrial && !!(c && TRIAL[c.id]); }
+  /** Is the car stopped? The control trial only sends when parked (gear P, or no measurable speed). */
+  get trialParked() {
+    const cs = this.app.carState, gear = cs.label('VCU_GearSig') || '', spd = cs.value('ESP_VehSpd');
+    if (gear) return gear.includes('P');
+    return spd != null && spd < 1;
+  }
+  // The control trial sends a greyed control's own head unit message (carcatalog.js TRIAL): parked only.
+  trialSend(c, value) {
+    const t = TRIAL[c.id];
+    if (!t) return false;
+    if (!this.sending) { this.app.toast(this.cmd.why || 'Not connected to the car'); return true; }
+    if (!this.trialParked) { this.app.toast('Control trial: parked only (gear P)'); return true; }
+    this.cmd.trial(t.bus === 'IBUS2' ? 'IBUS2' : 'IBUS1', t.addr, t.build(value), !!t.e2e);
+    this.v[c.id] = value;
+    this.notify();
+    return true;
+  }
   shows(c) { return this.showDemo || kindOf(c.ref ? this.defs.get(c.ref) : c) !== 'demo'; }
   /** Whether a category has anything but demo controls (else the ribbon leaves it out). */
   real(cat) {
@@ -681,6 +702,7 @@ export class CarControls {
 
   set(id, value) {
     const def = this.defs.get(id);
+    if (def && def.off && this.trialOn(def)) { this.trialSend(def, value); return; }
     if (def && def.off && (this.inApp || def.off === MOCK_OFF)) { this.app.toast(def.off); return; }
     if (def && def.acc && this.accLive) { this.setAcc(def, value); return; }
     if (def && def.tx && this.inApp) {
@@ -715,6 +737,12 @@ export class CarControls {
   // the sheet's buttons that do something rather than set something
   act(action) {
     const v = this.v;
+    // the control trial sends the real message for the two greyed actions too (parked only); the visual below still runs
+    if (this.controlTrial && this.sending && (action === 'california' || action === 'hollywood')) {
+      if (!this.trialParked) this.app.toast('Control trial: parked only (gear P)');
+      else if (action === 'california') { this.cmd.trial('IBUS1', 0x336, [[{ start: 31, len: 2 }, 2]], true); this.app.toast('California Mode: sent to the car'); }   // ICC_ReqCalifModHMIBtn = ON
+      else { const on = !v['display.hollywood']; this.cmd.trial('IBUS1', 0x563, [[{ start: 23, len: 8 }, on ? Math.round(90 / 1.8) : 0], [{ start: 15, len: 1 }, 1]], true); this.app.toast('Hollywood Mode: sent to the car'); }   // ICC_CID rotate, Command_Valid
+    }
     if (action === 'california') {
       for (const k of WINDOWS) if (!this.liveIds.has('win.' + k)) v['win.' + k] = 100;
       if (!this.liveIds.has('win.sunroof')) Object.assign(v, { 'win.sunroof': 100, 'win.sunroofMode': 'open' });
@@ -810,6 +838,7 @@ export class CarControls {
     const node = as === 'tile' ? this.tile(c) : this._control(c);
     if (node) this.tag(node, c);
     if (node && c.acc) this.accOff(node);
+    if (node && c.off && this.trialOn(c)) { node.dataset.trial = '1'; return node; }   // un-greyed by the control trial
     if (node && c.off && (this.inApp || c.off === MOCK_OFF)) {
       node.classList.add('off');
       node.title = c.off;
