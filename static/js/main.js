@@ -30,6 +30,7 @@ const DEFAULTS = {
   laneHeadingSign: 1, laneCurvatureSign: 1, objectHeadingSign: 1, laneConfThreshold: LANE_CONF_THRESHOLD,
   showFps: true, renderScale: 'auto', showMusic: true, showNav: true, miniMap: true, demoInfotainment: false, demoCarState: false, carDemo: false,
   calibration: true, mapPrefetchKm: 25, positionSource: 'car', roadcam: 'mirror', layout: 'classic', stopPlan: true, stopOffsetM: 0,
+  seatTrial: 'off',
 };
 
 function loadSettings() {

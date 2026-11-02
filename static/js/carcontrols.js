@@ -298,6 +298,8 @@ export class CarControls {
   // A group of the sheet: a heading, then its controls laid out by its kind (carcatalog.js).
   // whether a control is drawn: everything but the demo ones, unless they're asked for
   get showDemo() { return this.app.settings.carDemo === true; }
+  /** The seat move trial (Settings > Debug): the ms between seat-move frames while a jog button is held, or 0 (off). */
+  get seatTrial() { const v = this.app.settings.seatTrial; return v && v !== 'off' ? Number(v) || 0 : 0; }
   shows(c) { return this.showDemo || kindOf(c.ref ? this.defs.get(c.ref) : c) !== 'demo'; }
   /** Whether a category has anything but demo controls (else the ribbon leaves it out). */
   real(cat) {
@@ -1193,8 +1195,12 @@ export class CarControls {
       cushion.setAttribute('transform', `rotate(${(-Math.atan2(q.front - q.rear, 0.5) / Math.PI * 180 * 2.5).toFixed(1)} 71 71)`);
       backrest.setAttribute('transform', `rotate(${(q.recline / Math.PI * 180).toFixed(1)} 101 72)`);
     };
+    // greyed on the car (carcatalog.js moveOff) unless the seat move trial is on (Settings > Debug), which sends the
+    // move request every `trial` ms instead
+    const trial = this.seatTrial;
+    const off = !!(c.moveOff && this.inApp && !trial);
     const nudge = (key, sign) => {
-      if (c.moveOff && this.inApp) return;
+      if (off) return;
       if (this.liveIds.has(id)) return;   // the car's seat moves by the car's request below, and reports where it is
       const q = { ...this.v[id] }, [lo, hi] = SEAT_LIMITS[key];
       q[key] = Math.max(lo, Math.min(hi, q[key] + sign * SEAT_STEP[key]));
@@ -1205,15 +1211,15 @@ export class CarControls {
     // held: the head unit's manual-move request every 100 ms (ICC_0x533: 1 = forward / up, 2 = back / down),
     // then "Off"; without the car's link, the mockup's seat moves instead
     const hold = (label, text, key, sign) => {
-      const b = el('button', { 'aria-label': label, title: c.moveOff && this.inApp ? c.moveOff : label }, text);
-      setClass(b, 'off', c.moveOff && this.inApp);
+      const b = el('button', { 'aria-label': label, title: off ? c.moveOff : label }, text);
+      setClass(b, 'off', off);
       let timer = 0, holding = false;
       const sig = c.moves && c.moves[key];
       const start = () => {
-        if (c.moveOff && this.inApp) { this.app.toast(c.moveOff); return; }
+        if (off) { this.app.toast(c.moveOff); return; }
         if (sig && this.inApp) {
           if (!this.sending) { this.app.toast(this.cmd.why || 'Not connected to the car'); return; }
-          holding = this.cmd.hold(MSG.SEATMOVE, { [sig]: sign > 0 ? 1 : 2 });
+          holding = this.cmd.hold(MSG.SEATMOVE, { [sig]: sign > 0 ? 1 : 2 }, trial || undefined);
           setClass(b, 'held', holding);
           return;
         }

@@ -587,9 +587,14 @@ function seatControls(seat, driver) {
     { id: `seat.${seat}.heat`, type: 'levels', label: 'Heat', kind: 'heat', max: 3, def: driver ? 2 : 0, live: map(heatSig, HEAT_FROM_CAR), tx: pulse(MSG.SEATHEAT, heatReq, HEAT_TO_CAR) },
     { id: `seat.${seat}.pos`, type: 'seatpos', label: 'Position', def: { ...SEAT_MEMORY[1] }, driver,
       live: driver ? seatFromCar : undefined,
-      // ICC_0x533 went out clean on the car and the seat didn't move, and the head unit sends that message itself:
-      // not sent until that's understood. The car's own switches work, and the position still reads back.
-      moveOff: 'The seat doesn\'t answer this yet: use the seat\'s own switches' },
+      // the head unit's manual-move requests, held: ICC_0x533 while a button is down, then "Off". They went out clean
+      // on the car and the seat didn't move, and the head unit sends that message itself every 100 ms (so its "Off"
+      // frames fall between ours): greyed until that's understood, except under Debug > Seat move trial, which sends
+      // them at a chosen rate. The car's own switches work, and the position still reads back.
+      moves: driver
+        ? { slide: 'ICC_DrvrSeatTrackManReq', recline: 'ICC_DrvrSeatBackManReq', front: 'ICC_DrvrSeatTiltManReq', rear: 'ICC_DrvrHeiManReq' }
+        : { slide: 'ICC_PassSeatTrackManReq', recline: 'ICC_PassSeatBackManReq' },
+      moveOff: 'The seat doesn\'t answer this yet: use the seat\'s own switches (or Settings › Debug › Seat move trial)' },
     ...(driver ? [
       { id: 'seat.memory', type: 'memory', label: 'Memory', def: 1, tx: pulse(MSG.SEATHEAT, 'ICC_DrvrID', v => v + 1), noSave: 'Saving a position is a head unit key: hold its memory button' },   // ICC_DrvrID Mem_1 = 2
       T('seat.easy', 'Easy entry', true, 'Slides the seat back for getting in and out; the car doesn\'t report whether it\'s on', { tx: pulse(MSG.SEATHEAT, 'ICC_SeatWelFctEnaReq', { true: 2, false: 1 }) }),
@@ -640,6 +645,14 @@ export const LIVE = {
     row('Driver slide', pct(cs.rawOf('DSMC_DrvrSeatTrackPosn'))),
     row('Driver height', pct(cs.rawOf('DSMC_DrvrSeatHeiPosn'))),
     row('Driver backrest', pct(cs.rawOf('DSMC_DrvrSeatBackPosn'))),
+    // the seat's own switches (DSMC_0x4F1) and the head unit's seat-move message (ICC_0x533) as they arrive: for the seat move trial
+    row('Driver slide switch', cs.label('DSMC_DrvrSeatTrackSwtSts')),
+    row('Driver height switch', cs.label('DSMC_DrvrSeatHeiAdjSwtSts')),
+    row('Driver backrest switch', cs.label('DSMC_DrvrSeatBackAdjSwtSts')),
+    row('Head unit slide request', cs.label('ICC_DrvrSeatTrackManReq')),
+    row('Head unit height request', cs.label('ICC_DrvrHeiManReq')),
+    row('Head unit tilt request', cs.label('ICC_DrvrSeatTiltManReq')),
+    row('Head unit backrest request', cs.label('ICC_DrvrSeatBackManReq')),
   ),
   driving: (cs) => rows(
     row('Gear', (cs.label('VCU_GearSig') || '').replace('gear_', '').replace('_gear', '') || undefined),

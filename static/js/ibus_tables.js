@@ -341,6 +341,12 @@ export const RX_MESSAGES = [
     { name: 'PLGM_OTARdy_Fb', start: 53, len: 2, res: 1, off: 0, init: 0, enum: {0: "Initial", 1: "Ready", 2: "Not_Ready", 3: "Invalid"} },
     { name: 'PLGM_Tindcn_NTC', start: 63, len: 8, res: 1, off: -40, init: 110, enum: {110: "Invalid"} },
   ]},
+  { bus: 'IBUS1', addr: 0x4F1, name: 'DSMC_0x4F1', cycleMs: 100, signals: [
+    { name: 'DSMC_DrvrSeatTrackSwtSts', start: 9, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Fwd", 2: "Rwd", 3: "Defect"} },
+    { name: 'DSMC_DrvrSeatHeiAdjSwtSts', start: 11, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Up", 2: "Down", 3: "Defect"} },
+    { name: 'DSMC_DrvrSeatBackAdjSwtSts', start: 15, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Fwd", 2: "Rwd", 3: "Defect"} },
+    { name: 'DSMC_OTARdy_Fb', start: 17, len: 2, res: 1, off: 0, init: 0, enum: {0: "Initial", 1: "Ready", 2: "Not_Ready", 3: "Invalid"} },
+  ]},
   { bus: 'IBUS1', addr: 0x4F3, name: 'DSMC_0x4F3', cycleMs: 100, signals: [
     { name: 'DSMC_RiMirrrXDiecPosn', start: 7, len: 8, res: 1, off: 0, init: 0 },
     { name: 'DSMC_RiMirrrYDircPosn', start: 15, len: 8, res: 1, off: 0, init: 0 },
@@ -768,6 +774,22 @@ export const RX_MESSAGES = [
     { name: 'ICC_MetaSpdUnits', start: 60, len: 1, res: 1, off: 0, init: 0, enum: {0: "Kilometers_Per_Hour_(km/h)", 1: "Miles_Per_Hour_(mph)_Default_is_0"} },
     { name: 'ICC_Reserved', start: 63, len: 3, res: 1, off: 0, init: 0 },
   ]},
+  { bus: 'IBUS1', addr: 0x533, name: 'ICC_0x533', cycleMs: 100, signals: [
+    { name: 'ICC_DrvrSeatTrackManReq', start: 1, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Fwd", 2: "Rwd", 3: "Reserved"} },
+    { name: 'ICC_DrvrSeatTiltManReq', start: 3, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Up", 2: "Down", 3: "Reserved"} },
+    { name: 'ICC_DrvrHeiManReq', start: 5, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Up", 2: "Down", 3: "Reserved"} },
+    { name: 'ICC_DrvrSeatBackManReq', start: 7, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Fwd", 2: "Rwd", 3: "Reserved"} },
+    { name: 'ICC_PassSeatTrackManReq', start: 11, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Fwd", 2: "Rwd", 3: "Reserved"} },
+    { name: 'ICC_PassSeatBackManReq', start: 13, len: 2, res: 1, off: 0, init: 0, enum: {0: "Off", 1: "Fwd", 2: "Rwd", 3: "Reserved"} },
+    { name: 'ICC_LumbarUpd', start: 16, len: 1, res: 1, off: 0, init: 0, enum: {0: "Release", 1: "Press"} },
+    { name: 'ICC_LumbarDwn', start: 17, len: 1, res: 1, off: 0, init: 0, enum: {0: "Release", 1: "Press"} },
+    { name: 'ICC_LumbarFwd', start: 18, len: 1, res: 1, off: 0, init: 0, enum: {0: "Release", 1: "Press"} },
+    { name: 'ICC_LumbarBackw', start: 19, len: 1, res: 1, off: 0, init: 0, enum: {0: "Release", 1: "Press"} },
+    { name: 'ICC_AutoPassSeatVentnEna', start: 26, len: 3, res: 1, off: 0, init: 0, enum: {0: "Void", 1: "Turn_on_automatic_ventilation_for_high_air_volume", 2: "Turn_on_automatic_ventilation_medium_air_volume", 3: "Turn_on_automatic_ventilation_for_low_air_volume", 4: "turn_off_automatic_ventilation"} },
+    { name: 'ICC_AutoPassSeatHeatEna', start: 29, len: 3, res: 1, off: 0, init: 0, enum: {0: "Void", 1: "automatic_heating_high_temperature_position_ON", 2: "Switch_automatic_heating_medium_temperature_gear_on", 3: "Switch_automatic_heating_to_low_temperature", 4: "Turn_off_automatic_heating"} },
+    { name: 'ICC_AutoDrvrSeatVentnEna', start: 34, len: 3, res: 1, off: 0, init: 0, enum: {0: "void", 1: "Turn_on_automatic_ventilation_for_high_air_volume", 2: "Turn_on_automatic_ventilation_medium_air_volume", 3: "Turn_on_automatic_ventilation_for_low_air_volume", 4: "turn_off_automatic_ventilation"} },
+    { name: 'ICC_AutoDrvrSeatHeatEna', start: 37, len: 3, res: 1, off: 0, init: 0, enum: {0: "Void", 1: "automatic_heating_high_temperature_position_ON", 2: "Switch_automatic_heating_medium_temperature_gear_on", 3: "Switch_automatic_heating_to_low_temperature", 4: "Turn_off_automatic_heating"} },
+  ]},
 ];
 
 // What the HUD may send: the head unit's control messages. `cyclic` ones the head unit also sends every cycleMs
@@ -884,7 +906,7 @@ export const TX_MESSAGES = [
 ];
 
 // What the app's CAN helper lets through (receive) and the only IDs it may send, per bus (CanIds.kt has the same).
-export const RX_IDS = { IBUS1: [0x112, 0x113, 0x114, 0x115, 0x150, 0x151, 0x1B8, 0x1C2, 0x234, 0x2F4, 0x2F5, 0x318, 0x333, 0x335, 0x343, 0x358, 0x364, 0x373, 0x378, 0x471, 0x4F3, 0x4F5, 0x4F9, 0x512, 0x518, 0x554, 0x5EA, 0x179, 0x46B, 0x46D, 0x46F, 0x472, 0x473, 0x578, 0x579, 0x57A, 0x57B, 0x57C], IBUS2: [0xE9, 0x236, 0x321, 0x363, 0x369, 0x503, 0x504, 0x505, 0x580, 0x5A4, 0x630, 0x634, 0x641, 0x35B, 0x52A, 0x525, 0x526, 0x250, 0x251, 0x252, 0x255, 0x361, 0x362, 0x117, 0x118, 0x1C0, 0x20A, 0x20B, 0x20C, 0x20D, 0x20E, 0x20F, 0x210, 0x2C7, 0x2CA, 0x2CD, 0x2D0, 0x2D3, 0x2D6, 0x2D9, 0x2DC, 0x2DF, 0x2E2, 0x2E5, 0x2E8, 0x2E9, 0x2EA, 0x311, 0x313, 0x314, 0x315, 0x316, 0x317, 0x31A, 0x31B, 0x31C, 0x32B, 0x32D, 0x32F, 0x334, 0x339, 0x33B, 0x33D, 0x33F, 0x340, 0x342, 0x34B, 0x34D, 0x34F, 0x350, 0x351, 0x352, 0x353, 0x356, 0x359, 0x527] };
+export const RX_IDS = { IBUS1: [0x112, 0x113, 0x114, 0x115, 0x150, 0x151, 0x1B8, 0x1C2, 0x234, 0x2F4, 0x2F5, 0x318, 0x333, 0x335, 0x343, 0x358, 0x364, 0x373, 0x378, 0x471, 0x4F3, 0x4F5, 0x4F9, 0x512, 0x518, 0x554, 0x5EA, 0x179, 0x46B, 0x46D, 0x46F, 0x472, 0x473, 0x578, 0x579, 0x57A, 0x57B, 0x57C, 0x4F1, 0x533], IBUS2: [0xE9, 0x236, 0x321, 0x363, 0x369, 0x503, 0x504, 0x505, 0x580, 0x5A4, 0x630, 0x634, 0x641, 0x35B, 0x52A, 0x525, 0x526, 0x250, 0x251, 0x252, 0x255, 0x361, 0x362, 0x117, 0x118, 0x1C0, 0x20A, 0x20B, 0x20C, 0x20D, 0x20E, 0x20F, 0x210, 0x2C7, 0x2CA, 0x2CD, 0x2D0, 0x2D3, 0x2D6, 0x2D9, 0x2DC, 0x2DF, 0x2E2, 0x2E5, 0x2E8, 0x2E9, 0x2EA, 0x311, 0x313, 0x314, 0x315, 0x316, 0x317, 0x31A, 0x31B, 0x31C, 0x32B, 0x32D, 0x32F, 0x334, 0x339, 0x33B, 0x33D, 0x33F, 0x340, 0x342, 0x34B, 0x34D, 0x34F, 0x350, 0x351, 0x352, 0x353, 0x356, 0x359, 0x527] };
 export const TX_IDS = { IBUS1: [0x4E, 0x530, 0x534, 0x90, 0x528, 0x533, 0x52], IBUS2: [] };
 
 // The chips' hardware acceptance filters the app sets at start so every RX ID and the driver's defaults get through (see gen_ibus.py).

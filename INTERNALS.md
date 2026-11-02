@@ -194,6 +194,15 @@ the gateway broadcasts there and forwards every frame to the page (see
   audio volume along (ICC_0x44/0x46). Energy shows the charging power, pack voltage and current, time
   left, limits and the battery's health. In a plain browser nothing is live and nothing is sent: the
   controls stay a mockup. *Display → Debug → Demo live car state* fills the read-out with made-up values.
+  **Seat moves** are greyed on the car: the head unit's manual-move message (ICC_0x533, held every
+  100 ms then "Off") left Pulse clean (226 frames, no errors in the link check) and the seat did not
+  move, while its own switches and the position read-out (DSMC_0x4F5) work. The matrix has the head unit
+  sending 0x533 itself every 100 ms with "Off" in it, so its idle frames would fall between ours, and the
+  owner's manual gives the seat only its own switches (the touchscreen never moves it), so the seat
+  module may not act on 0x533 at all. To tell those apart the app now also reads 0x533 (whether and how
+  the head unit sends it: *Signals → IBUS1*) and the seat's switch states (DSMC_0x4F1), shown in *Seats →
+  From the car*, and *Debug → Seat move trial* un-greys the adjusters and sends the request every 100 ms
+  or every 25 ms (ours outnumbering the head unit's idle frames) for a parked test.
 
 Pulse's CAN driver has hardware acceptance filters (`/sys/module/mcp251x/parameters/rxb_*`) whose
 defaults pass only parts of the ID range and would keep the seat and mirror positions, the liftgate's,

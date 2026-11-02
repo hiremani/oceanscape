@@ -55,7 +55,10 @@ RX = {
             # the telematics box's fused heading and GPS fix quality (pose.js)
             0x179, 0x46B, 0x46D, 0x46F, 0x472, 0x473,
             # the VCU's energy counters by consumer, driving and charging (hud.js energy details)
-            0x578, 0x579, 0x57A, 0x57B, 0x57C],
+            0x578, 0x579, 0x57A, 0x57B, 0x57C,
+            # the driver's seat switches as the seat module reports them, and the head unit's own seat-move message
+            # (ICC_0x533, which it is specified to send every 100 ms): to see why a seat move of ours does nothing
+            0x4F1, 0x533],
   "IBUS2": [0xE9, 0x236, 0x321, 0x363, 0x369, 0x503, 0x504, 0x505, 0x580, 0x5A4, 0x630, 0x634, 0x641, 0x35B, 0x52A,
             # the telematics box's GPS position and altitude, and the head unit's ADASIS map horizon (pose.js, map matching)
             0x525, 0x526, 0x250, 0x251, 0x252, 0x255, 0x361, 0x362,

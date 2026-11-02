@@ -501,6 +501,12 @@ export class Settings {
       ['showFps', 'Frame rate', 'Frames per second under the status card. Tap it for the slowest frame, the HUD\'s own script time per frame, ' +
         'draw calls, triangles and the render resolution.'],
     ]));
+    body.append(el('div.section', el('h3', 'Seat move trial'),
+      el('p.desc', 'The seat adjusters in Seats are greyed on the car: the head unit\'s seat-move message (ICC_0x533) went out and the seat ' +
+        'didn\'t move. On, they send it while a jog button is held, every 100 ms as the head unit is specified to, or every 25 ms so ours ' +
+        'outnumber the head unit\'s own idle frames of the same message. Watch Seats › From the car (the switch and head unit rows) and ' +
+        'Signals › IBUS1 › 0x533 while trying. Parked only.'),
+      this.app.segmented([['off', 'Off'], ['100', 'Every 100 ms'], ['25', 'Every 25 ms']], s.seatTrial || 'off', v => set('seatTrial', v))));
     body.append(el('div.section', el('h3', 'Render resolution'),
       el('p.desc', 'The 3D view\'s resolution, as a share of the screen\'s. While frames come slower than the screen refreshes, Auto ' +
         'first drops the blur behind the HUD\'s cards, then steps the resolution down (to 60%), and brings them back once frames keep up. ' +

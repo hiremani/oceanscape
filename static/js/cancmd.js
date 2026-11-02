@@ -110,13 +110,16 @@ export class CarCommands {
     return true;
   }
 
-  /** A cyclic message kept going while a button is held: call release() when it's let go. */
-  hold(addr, values) {
+  /** A cyclic message kept going while a button is held: call release() when it's let go. `everyMs` is the
+   *  time between frames, the message's cycle time unless the caller wants them denser (the seat move trial:
+   *  the head unit sends its own idle frame of the same message every cycle, so ours outnumber it). */
+  hold(addr, values, everyMs = HOLD_MS) {
     this.release(addr);
     if (!this.available) { this.app.toast(this.why); return false; }
     const bytes = encode(addr, values);
-    if (!this._send(addr, bytes, 1, HOLD_MS)) return false;
-    const id = setInterval(() => { if (!this._send(addr, bytes, 1, HOLD_MS)) this.release(addr); }, HOLD_MS);
+    const every = Math.max(20, everyMs);   // the app allows 60 frames a second in all
+    if (!this._send(addr, bytes, 1, every)) return false;
+    const id = setInterval(() => { if (!this._send(addr, bytes, 1, every)) this.release(addr); }, every);
     this.holds.set(addr, id);
     setTimeout(() => { if (this.holds.get(addr) === id) this.release(addr); }, 15000);   // a stuck pointer: let go anyway
     return true;
