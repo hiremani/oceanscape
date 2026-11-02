@@ -88,6 +88,10 @@ export class Hud {
     this.alerts = $('#alerts');
     this.telltales = $('#telltales');
     this.roadinfo = $('#roadinfo');
+    // a clock, the device's current time; independent of the car data so it shows even offline
+    this.clock = $('#clock');
+    this._tickClock();
+    setInterval(() => this._tickClock(), 1000);
     this.roadname = $('#roadname');
     this.roadnameName = $('#roadname-name');
     this.roadnameRef = $('#roadname-ref');
@@ -312,6 +316,10 @@ export class Hud {
     }
   }
 
+  _tickClock() {
+    if (this.clock) setText(this.clock, new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+  }
+
   _roadinfo(f, unit) {
     const rows = [];
     if (f) {
@@ -343,6 +351,10 @@ export class Hud {
       if (f.vehicle && f.vehicle.outsideTempC != null) {
         const tc = f.vehicle.outsideTempC;
         rows.push(['temp', el('div.ri', el('small', unit === 'kmh' ? `${Math.round(tc)}°C` : `${Math.round(tc * 9 / 5 + 32)}°F`))]);
+      }
+      // the 12 V rail from the DC-DC converter (fisker_world power.aux12v); shows once 0x520 is read (gen_ibus.py RX)
+      if (f.power && f.power.aux12v != null) {
+        rows.push(['aux12v', el('div.ri', '12 V', el('small', `${f.power.aux12v.toFixed(1)} V`))]);
       }
     }
     const key = rows.map(r => r[0] + r[1].textContent).join('|');

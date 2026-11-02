@@ -182,6 +182,7 @@ html.lowfx .card, html.lowfx .viewdock > button.icon, html.lowfx .viewmenu { bac
 .chips { position: absolute; top: 16px; right: 16px; display: flex; gap: 6px; z-index: 5; }
 .chip { font-size: 11px; font-weight: 700; letter-spacing: .8px; padding: 5px 9px; border-radius: 99px; background: var(--panel); color: var(--muted); box-shadow: var(--shadow); text-transform: uppercase; }
 .chip.ok { color: var(--green); } .chip.warn { color: var(--amber); } .chip.bad { color: var(--red); } .chip.replay { background: var(--accent); color: #fff; }
+.chip.clock { color: var(--text); font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: .02em; }
 .chip.radar { color: var(--radar); }
 button.chip { border: 0; cursor: pointer; font-family: inherit; }
 
