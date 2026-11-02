@@ -166,6 +166,11 @@ class MainActivity : Activity(), Link.Listener, Infotainment.Listener, CanBridge
         holder = findViewById(R.id.web_holder)
         card = findViewById(R.id.card)
 
+        // Keep the center screen on while the HUD is in front: it should not dim or sleep on an idle timeout while
+        // the car is on. The flag only holds the screen on while this activity is the foreground window, and it is
+        // released when another app comes front or the board powers down, so it is naturally "while the car is on".
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         if (Build.VERSION.SDK_INT >= 28) {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
