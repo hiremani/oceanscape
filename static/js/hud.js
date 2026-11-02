@@ -4,6 +4,8 @@ import { stopLine } from './stopplan.js';
 import { $, $$, el, icon, iconSvg, setClass, setText, prettyLabel, MS_TO_KPH, MS_TO_MPH } from './util.js';
 import { EnergyDetails } from './energy.js';
 
+const BELT_HOLD_S = 1.5;   // the driver's belt must read unbuckled this long before the telltale lights
+
 const GEAR_LETTER = {
   park: 'P', reverse: 'R', neutral: 'N', drive: 'D', eco: 'D', sport: 'D', low: 'D', brake: 'D', manumatic: 'D',
   gear_P: 'P', gear_N: 'N', R_gear: 'R', D_gear: 'D', gear_D: 'D', gear_E: 'D', gear_S: 'D',
@@ -261,8 +263,12 @@ export class Hud {
       t.className = 'tt' + (color ? ' ' + color : '') + (color === false ? ' hidden' : '');
     };
     show('beam', lights.high ? 'blue' : (lights.low ? 'green' : false));
-    const belt = (cs && cs.seatbeltUnlatched) || (f && f.vehicle && f.vehicle.seatbelt && f.vehicle.seatbelt.driver === 1);
-    show('belt', belt ? 'red' : false);
+    // the buckle switch's message reads "unbuckled" for a frame or two now and then, which flickered the light;
+    // show it only once the belt has read unbuckled continuously for BELT_HOLD_S
+    const unlatched = (cs && cs.seatbeltUnlatched) || (f && f.vehicle && f.vehicle.seatbelt && f.vehicle.seatbelt.driver === 1);
+    const nowS = performance.now() / 1000;
+    if (!unlatched) this.beltSince = null; else if (this.beltSince == null) this.beltSince = nowS;
+    show('belt', this.beltSince != null && nowS - this.beltSince >= BELT_HOLD_S ? 'red' : false);
     const doors = f && f.vehicle && f.vehicle.doors;
     const doorOpen = (cs && cs.doorOpen) || (doors && (doors.fl || doors.fr || doors.rl || doors.rr || doors.trunk || doors.hood));
     show('door', doorOpen ? 'red' : false);
