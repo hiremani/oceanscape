@@ -170,8 +170,9 @@ export class EnergyDetails {
     }
     this.ui.foot = el('p.dialog-foot');
     body.append(this.ui.foot);
+    this.ui.aux = el('span.dialog-aux.hidden');   // the 12 V rail, once the DC-DC output (0x520) is read
     const card = el('div.dialog-card', { role: 'dialog', 'aria-label': 'Energy details' },
-      el('header', el('h2', 'Energy'), mode, close), body);
+      el('header', el('h2', 'Energy'), this.ui.aux, mode, close), body);
     this.root = el('div.dialog.hidden', { id: 'energy', 'aria-hidden': 'true', onclick: (e) => { if (e.target === this.root) this.close(); } }, card);
     this.ui.mode = mode;
     document.getElementById('app').append(this.root);
@@ -179,6 +180,11 @@ export class EnergyDetails {
 
   render(cs, t) {
     if (!this.root || !cs) return;
+    // 12 V rail from the world state's power (fisker_world DCDC_OutpVolt); shown only once it is being read
+    const power = this.app.state && this.app.state.fisker && this.app.state.fisker.power;
+    const v12 = power ? power.aux12v : null;
+    setText(this.ui.aux, v12 != null ? `12 V · ${v12.toFixed(1)} V` : '');
+    setClass(this.ui.aux, 'hidden', v12 == null);
     const modeRaw = cs.rawOf(MODE_SIGNAL);
     const modeText = modeRaw == null ? '' : (MODE_TEXT[modeRaw] || '');
     setClass(this.ui.mode, 'hidden', !modeText);

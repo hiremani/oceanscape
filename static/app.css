@@ -525,6 +525,8 @@ aside.carpanel.hvac .fo-sheet__body > * + * { margin-top: 0; }
 .dialog-card .close { height: 44px; border: 0; background: transparent; border-radius: 10px; }
 .dialog-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px 20px 14px; -webkit-overflow-scrolling: touch; }
 .dialog-foot { margin: 16px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted); }
+.dialog-aux { font-size: 13px; color: var(--muted); margin-left: auto; letter-spacing: .02em; white-space: nowrap; }
+.dialog-aux.hidden { display: none; }
 .en-mode { background: var(--accent-soft); color: var(--accent); }
 .en-sec { padding: 12px 0 4px; }
 .en-sec + .en-sec { border-top: 1px solid var(--line); }

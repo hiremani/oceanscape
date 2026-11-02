@@ -605,6 +605,9 @@ export class FiskerWorld {
       demandKw: r(demand, 1),   // + driving, - regen
       kw: r(actual, 1),
       tqReq: reqs.length ? reqs.reduce((a, b) => a + b, 0) : null,   // wheel torque requested, both axles, Nm
+      // 12 V rail, from the DC-DC converter's output (DCDC_0x520). Null until 0x520 is in the hardware filter
+      // (gen_ibus.py RX); it is prepared there, pending a bus capture, so this lights up once that lands.
+      aux12v: r(s.get('DCDC_OutpVolt'), 1),
       ...axles,
     };
   }
