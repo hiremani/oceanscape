@@ -21,6 +21,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.content.ComponentCallbacks2
+import android.os.PowerManager
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
@@ -189,6 +190,27 @@ class MainActivity : Activity(), Link.Listener, Infotainment.Listener, CanBridge
         load()                   // the page is local: up at once, connected or not
     }
 
+    // Experiment (the car sleeps its own screen with a power_button event; FLAG_KEEP_SCREEN_ON cannot override that):
+    // hold a SCREEN_BRIGHT wake lock while the HUD is in front, acquiring it wakes the screen. A power-button sleep
+    // may still win, but this is the strongest an app can ask for.
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    @Suppress("DEPRECATION")
+    private fun acquireScreenWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) return
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                "oceanscape:hud-screen",
+            ).also { it.setReferenceCounted(false); it.acquire() }
+        } catch (e: Exception) { Log.w(TAG, "screen wake lock failed: ${e.message}") }
+    }
+
+    private fun releaseScreenWakeLock() {
+        try { if (wakeLock?.isHeld == true) wakeLock?.release() } catch (e: Exception) { /* already released */ }
+    }
+
     override fun onStart() {
         super.onStart()
         web?.resumeTimers()
@@ -199,11 +221,13 @@ class MainActivity : Activity(), Link.Listener, Infotainment.Listener, CanBridge
         CanBridge.addListener(this)
         if (page == Page.LOADED) reloadInfotainment()   // what changed while the HUD was away
         started = true
+        acquireScreenWakeLock()
         if (locationWanted && location.hasPermission()) startLocation()
     }
 
     override fun onStop() {
         started = false
+        releaseScreenWakeLock()
         location.stop()
         Infotainment.removeListener(this)
         CanBridge.removeListener(this)
