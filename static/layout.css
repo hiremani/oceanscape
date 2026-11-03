@@ -46,8 +46,15 @@ html[data-layout]:not([data-layout="classic"]) .roadinfo { top: 104px; right: 12
 html[data-layout]:not([data-layout="classic"]) .toast { bottom: 128px; }
 html[data-layout]:not([data-layout="classic"]) .replaybar { right: 12px; left: 12px; bottom: 124px; width: auto; }
 
-/* ---------- Map Centre: the glance strip + bar, the 3D scene held straight down over the map (scene.js 'map' view) ---------- */
+/* ---------- Map Centre: the 2D street map (minimap #mapcard) IS the screen, the 3D scene is hidden. The minimap
+   canvas sizes itself to its CSS box, and it draws square, so a big square box centred in the width renders a big
+   heading-up map with the car on it -- the map as the centre, not an overlay. ---------- */
+html[data-layout="mapcenter"] #scene { display: none; }
 html[data-layout="mapcenter"] .hl-tiles, html[data-layout="mapcenter"] .hl-pages { display: none; }
+html[data-layout="mapcenter"] #mapcard {
+  display: block; position: absolute; left: 12px; right: 12px; top: 50%; transform: translateY(-50%);
+  width: auto; height: auto; aspect-ratio: 1 / 1; max-width: none; max-height: calc(100vh - 232px); margin: 0; }
+html[data-layout="mapcenter"] #mapcard .mm-canvas { display: block; width: 100%; height: 100%; border-radius: inherit; }
 html[data-layout="mapcenter"] .musiccard { left: 0; right: 0; bottom: 112px; width: auto; }
 
 /* ---------- Ocean Native (Option D): the glance strip/bar skinned to the stock FiskerOS look -- solid bars (no
@@ -139,8 +146,8 @@ html[data-layout="glance"] #app:has(.musiccard:not(.hidden)) { --hl-music-h: 64p
 html[data-layout="glance"][data-driving="false"] #app:has(.musiccard:not(.hidden)) { --hl-music-h: 112px; }
 
 /* ---------- Tile Dash ---------- */
-html[data-layout="tiles"]:not(.carmode) #scene { height: 40%; }
-html[data-layout="tiles"] .hl-tiles { position: absolute; left: 0; right: 0; top: calc(40% + 8px); bottom: calc(112px + 52px); z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 8px; padding: 0 12px; overflow: hidden; }
+html[data-layout="tiles"]:not(.carmode) #scene { height: 58%; }
+html[data-layout="tiles"] .hl-tiles { position: absolute; left: 0; right: 0; top: calc(58% + 8px); bottom: calc(112px + 52px); z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 150px; align-content: start; gap: 8px; padding: 0 12px; overflow: hidden; }
 .hl-tile { display: flex; flex-direction: column; justify-content: space-between; padding: 16px 20px; min-height: 0; border: 1px solid var(--glass-border); border-radius: 18px;
   background: var(--glass-bg); box-shadow: var(--glass-bevel), var(--glass-drop); color: var(--text); text-align: left; }
 .hl-tile .l { font: 500 15px/1 var(--font); color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }

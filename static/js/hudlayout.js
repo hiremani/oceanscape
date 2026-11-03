@@ -145,9 +145,9 @@ export class HudLayout {
       const barLay = (want === 'mapcenter' || want === 'native') ? 'glance' : want;   // Map Centre and Ocean Native carry the glance bar
       for (const { def, node } of this.buttons.values()) setClass(node, 'hidden', !def.layouts.includes(barLay));
     }
-    // Map Centre holds the camera straight down over the map; the others release it to the user's view setting
-    if (want === 'mapcenter') { this.app.scene.viewLocked = true; this.app.scene.setView('map', false, true); }
-    else if (this.app.scene.viewLocked) { this.app.scene.viewLocked = false; this.app.setView(this.app.settings.view, true); }
+    // Map Centre shows the 2D street map (minimap) as the whole centre and hides the 3D scene (CSS), so no camera
+    // lock is needed; make sure any earlier lock is cleared.
+    if (this.app.scene.viewLocked) { this.app.scene.viewLocked = false; this.app.setView(this.app.settings.view, true); }
     this.manualPage = null;
     this.tilesBox.replaceChildren();
     this.tiles.clear();
