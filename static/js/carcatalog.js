@@ -591,14 +591,13 @@ function seatControls(seat, driver) {
     { id: `seat.${seat}.heat`, type: 'levels', label: 'Heat', kind: 'heat', max: 3, def: driver ? 2 : 0, live: map(heatSig, HEAT_FROM_CAR), tx: pulse(MSG.SEATHEAT, heatReq, HEAT_TO_CAR) },
     { id: `seat.${seat}.pos`, type: 'seatpos', label: 'Position', def: { ...SEAT_MEMORY[1] }, driver,
       live: driver ? seatFromCar : undefined,
-      // the head unit's manual-move requests, held: ICC_0x533 while a button is down, then "Off". They went out clean
-      // on the car and the seat didn't move, and the head unit sends that message itself every 100 ms (so its "Off"
-      // frames fall between ours): greyed until that's understood, except under Debug > Seat move trial, which sends
-      // them at a chosen rate. The car's own switches work, and the position still reads back.
+      // the head unit's manual-move requests, held: ICC_0x533 while a button is down (1 = forward/up, 2 = back/down).
+      // Sent by copying the head unit's own latest 0x533 and changing only the one move field, densely, while held
+      // (cancmd.seatHold) -- a from-scratch frame zeroed the message's other live fields and fell between the head
+      // unit's own idle frames, and the seat didn't move. Parked only; the position still reads back either way.
       moves: driver
         ? { slide: 'ICC_DrvrSeatTrackManReq', recline: 'ICC_DrvrSeatBackManReq', front: 'ICC_DrvrSeatTiltManReq', rear: 'ICC_DrvrHeiManReq' }
-        : { slide: 'ICC_PassSeatTrackManReq', recline: 'ICC_PassSeatBackManReq' },
-      moveOff: 'The seat doesn\'t answer this yet: use the seat\'s own switches (or Settings › Debug › Seat move trial)' },
+        : { slide: 'ICC_PassSeatTrackManReq', recline: 'ICC_PassSeatBackManReq' } },
     ...(driver ? [
       { id: 'seat.memory', type: 'memory', label: 'Memory', def: 1, tx: pulse(MSG.SEATHEAT, 'ICC_DrvrID', v => v + 1), noSave: 'Saving a position is a head unit key: hold its memory button' },   // ICC_DrvrID Mem_1 = 2
       T('seat.easy', 'Easy entry', true, 'Slides the seat back for getting in and out; the car doesn\'t report whether it\'s on', { tx: pulse(MSG.SEATHEAT, 'ICC_SeatWelFctEnaReq', { true: 2, false: 1 }) }),

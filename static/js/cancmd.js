@@ -164,4 +164,40 @@ export class CarCommands {
     setTimeout(() => { if (this.holds.get(addr) === id) this.release(addr); }, ms);
     return true;
   }
+
+  /** A held seat move. The seat message (0x533) is cyclic and carries other live fields (lumbar, auto heat and
+   *  vent); building it from nothing zeroed those and our 100 ms frames fell between the head unit's own idle
+   *  ones, so the seat didn't move. Instead copy the head unit's own latest 0x533, change only the one move field
+   *  and send that densely while the button is held, so every other field stays as the head unit has it and our
+   *  frames outnumber its idle frame. `values` is {signalName: raw} (1 = forward/up, 2 = back/down). `everyMs` is
+   *  the gap between frames (default 50, denser than the 100 ms cycle). 0x533 has no checksum or counter, so this
+   *  is a plain copy-and-change -- no e2e. The caller guards gear (parked); released by seatRelease. */
+  seatHold(addr, values, everyMs = 50) {
+    this.release(addr);
+    if (!this.available) { this.app.toast(this.why); return false; }
+    const m = BY_ADDR.get(addr);
+    if (!m) return false;
+    const bus = m.bus, cs = this.app.carState;
+    const pairs = Object.entries(values).map(([name, raw]) => [m.byName.get(name), raw]).filter(([s]) => s);
+    const build = () => { const cur = cs.frameBytes(bus, addr); return cur ? nextFrame(cur, pairs, false) : null; };
+    if (!build()) { this.app.toast('Waiting for the head unit to send the seat message'); return false; }
+    const every = Math.max(20, everyMs);
+    const send = () => { const b = build(); if (b) this._sendRaw(bus, addr, b); };
+    send();
+    const id = setInterval(send, every);
+    this.holds.set(addr, id);
+    setTimeout(() => { if (this.holds.get(addr) === id) this.seatRelease(addr); }, 15000);   // a stuck pointer: let go anyway
+    return true;
+  }
+
+  /** Let a held seat move go: stop our dense frames, then send the head unit's own latest frame back (its move
+   *  field is already "no request"), so the seat stops at once instead of waiting for the head unit's next cycle. */
+  seatRelease(addr) {
+    const id = this.holds.get(addr);
+    if (id !== undefined) { clearInterval(id); this.holds.delete(addr); }
+    const m = BY_ADDR.get(addr);
+    if (!m) return;
+    const cur = this.app.carState && this.app.carState.frameBytes(m.bus, addr);
+    if (cur) { const b = nextFrame(cur, [], false); this._sendRaw(m.bus, addr, b); setTimeout(() => this._sendRaw(m.bus, addr, b), HOLD_MS); }
+  }
 }
