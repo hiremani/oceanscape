@@ -49,15 +49,19 @@ html[data-layout]:not([data-layout="classic"]) .replaybar { right: 12px; left: 1
 /* ---------- Map Centre: the 2D street map (minimap #mapcard) IS the screen, the 3D scene is hidden. The minimap
    canvas sizes itself to its CSS box, and it draws square, so a big square box centred in the width renders a big
    heading-up map with the car on it -- the map as the centre, not an overlay. ---------- */
-html[data-layout="mapcenter"] .hl-tiles, html[data-layout="mapcenter"] .hl-pages { display: none; }
-/* the 2D street map on top as a big square (full width), the 3D car in the pane below it (a split, like the mockup) */
-html[data-layout="mapcenter"] #mapcard {
-  display: block; position: absolute; left: 12px; right: 12px; top: 104px; transform: none;
-  width: auto; height: auto; aspect-ratio: 1 / 1; max-width: none; max-height: none; margin: 0; }
-html[data-layout="mapcenter"] #mapcard .mm-canvas { display: block; width: 100%; height: 100%; border-radius: inherit; }
-/* the 3D canvas needs an explicit height (a canvas with height:auto uses its attribute height, not top/bottom) */
-html[data-layout="mapcenter"] #scene { display: block; left: 0; right: 0; top: calc(100vw + 88px); height: calc(100vh - 100vw - 200px); }
+/* Map Centre: the 3D scene on top, the 2D street map (minimap #mapcard) filling the bottom -- a split that keeps
+   both. The scene is a sized block (its canvas needs an explicit height, never height:auto). The map card is only
+   positioned while it is NOT .hidden: the minimap sets .hidden and skips drawing whenever there is no map match
+   yet (no GPS fix or tiles), so forcing the card visible then would show an empty dark box. When the map is
+   hidden the scene fills the screen instead (via :has), so there is never a dark gap. */
+html[data-layout="mapcenter"] .hl-tiles, html[data-layout="mapcenter"] .hl-pages,
 html[data-layout="mapcenter"] .musiccard { display: none; }
+html[data-layout="mapcenter"]:not(.carmode) #scene { display: block; top: 104px; height: calc(100vh - 216px); }
+html[data-layout="mapcenter"]:has(#mapcard:not(.hidden)):not(.carmode) #scene { height: 46%; }
+html[data-layout="mapcenter"] #mapcard:not(.hidden) {
+  display: block; position: absolute; left: 12px; right: 12px; bottom: 104px; top: auto; transform: none;
+  width: auto; height: calc(54% - 128px); max-width: none; max-height: none; margin: 0; aspect-ratio: auto; }
+html[data-layout="mapcenter"] #mapcard .mm-canvas { display: block; width: 100%; height: 100%; border-radius: inherit; }
 
 /* ---------- Ocean Native (Option D): the glance strip/bar skinned to the stock FiskerOS look -- solid bars (no
    glass blur), the scene in its default view. A skin over the glance structure, as the UX report recommended. ---------- */
