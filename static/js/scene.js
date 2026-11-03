@@ -136,6 +136,7 @@ export const VIEWS = {
   top: { r: 26, phi: 0.04, theta: 0, offY: 0.0 },
   close: { r: 8.5, phi: 1.12, theta: 0.65, offY: 0.06 },
   far: { r: 36, phi: 0.9, theta: 0, offY: 0.26 },
+  map: { r: 40, phi: 0.02, theta: 0, offY: 0.0 },    // straight down and wide: the Map Centre layout's top-down map
 };
 
 function toScene(x, y) { return [-y, -x]; }
@@ -545,7 +546,8 @@ export class CarScene {
     this.resize();
   }
 
-  setView(name, instant = false) {
+  setView(name, instant = false, force = false) {
+    if (this.viewLocked && !force) return;   // a layout (Map Centre) is holding the camera top-down
     const v = VIEWS[name] || VIEWS.chase;
     this.view = name;
     const to = new THREE.Spherical(v.r * (name === 'chase' ? this.chaseDolly : 1), v.phi, v.theta);

@@ -11,7 +11,7 @@
 import { $, $$, el, iconSvg, setClass, setText } from './util.js';
 import { drivingState, leadOf, chargeOf, rangeOf, tripOf, odometerOf, chargeLine, fmtMinutes, autoPage, pageFor, PAGES } from './hudlayout_logic.js';
 
-export const LAYOUTS = [['classic', 'Classic'], ['glance', 'Glance strip'], ['tiles', 'Tile dash']];
+export const LAYOUTS = [['classic', 'Classic'], ['glance', 'Glance strip'], ['tiles', 'Tile dash'], ['mapcenter', 'Map Centre'], ['native', 'Ocean Native']];
 const TICK_MS = 150;        // the band, the bar's states and the tiles update this often
 const PARKED_ONLY = 'Parked only';
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
@@ -142,8 +142,12 @@ export class HudLayout {
       const view = this.buttons.get('view');
       this._move('#viewmenu', view.node.querySelector('.hl-viewslot'));
       $('#viewmenu')?.classList.add('hidden');
-      for (const { def, node } of this.buttons.values()) setClass(node, 'hidden', !def.layouts.includes(want));
+      const barLay = want === 'mapcenter' ? 'glance' : want;   // Map Centre carries the glance bar
+      for (const { def, node } of this.buttons.values()) setClass(node, 'hidden', !def.layouts.includes(barLay));
     }
+    // Map Centre holds the camera straight down over the map; the others release it to the user's view setting
+    if (want === 'mapcenter') { this.app.scene.viewLocked = true; this.app.scene.setView('map', false, true); }
+    else if (this.app.scene.viewLocked) { this.app.scene.viewLocked = false; this.app.setView(this.app.settings.view, true); }
     this.manualPage = null;
     this.tilesBox.replaceChildren();
     this.tiles.clear();

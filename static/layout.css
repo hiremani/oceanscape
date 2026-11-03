@@ -46,6 +46,10 @@ html[data-layout]:not([data-layout="classic"]) .roadinfo { top: 104px; right: 12
 html[data-layout]:not([data-layout="classic"]) .toast { bottom: 128px; }
 html[data-layout]:not([data-layout="classic"]) .replaybar { right: 12px; left: 12px; bottom: 124px; width: auto; }
 
+/* ---------- Map Centre: the glance strip + bar, the 3D scene held straight down over the map (scene.js 'map' view) ---------- */
+html[data-layout="mapcenter"] .hl-tiles, html[data-layout="mapcenter"] .hl-pages { display: none; }
+html[data-layout="mapcenter"] .musiccard { left: 0; right: 0; bottom: 112px; width: auto; }
+
 /* the strip: the essential driving set in one band at the top (Euro NCAP's line of sight), the status card's own
    elements laid out in a row */
 .hl-strip { position: absolute; left: 0; right: 0; top: 0; height: 96px; z-index: 8; display: flex; align-items: center; gap: 18px; padding: 0 20px;
