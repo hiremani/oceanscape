@@ -67,22 +67,3 @@ describe('nextFrame', () => {
     assert.equal(getRaw(out, E2E_ALIVE), 0);
   });
 });
-
-describe('seat move (0x533): copy the head unit frame, change only the move field', () => {
-  // the real ICC_0x533 signal positions (dbc/fisker_ocean_ibus.dbc): a driver track request and a lumbar bit
-  const track = { start: 1, len: 2 };    // ICC_DrvrSeatTrackManReq (1 = forward, 2 = back)
-  const lumbarUp = { start: 16, len: 1 }; // ICC_LumbarUpd -- a different live field the head unit owns
-  test('sets the move request and leaves the head unit\'s other fields (lumbar, byte payloads) untouched', () => {
-    const cur = new Uint8Array(8);
-    putRaw(cur, lumbarUp, 1);             // head unit has lumbar-up set
-    cur[3] = 0x5A; cur[6] = 0xC3;         // some other live payload bytes
-    const out = nextFrame(cur, [[track, 1]], false);   // seatHold builds exactly this (e2e off: 0x533 has no checksum)
-    assert.equal(getRaw(out, track), 1, 'forward requested');
-    assert.equal(getRaw(out, lumbarUp), 1, 'lumbar kept');
-    assert.equal(out[3], 0x5A, 'byte 3 kept');
-    assert.equal(out[6], 0xC3, 'byte 6 kept');
-    // releasing copies the head unit frame back unchanged: the move field is "no request"
-    const idle = nextFrame(cur, [], false);
-    assert.equal(getRaw(idle, track), 0, 'release leaves no request');
-  });
-});

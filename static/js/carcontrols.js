@@ -1257,10 +1257,13 @@ export class CarControls {
       cushion.setAttribute('transform', `rotate(${(-Math.atan2(q.front - q.rear, 0.5) / Math.PI * 180 * 2.5).toFixed(1)} 71 71)`);
       backrest.setAttribute('transform', `rotate(${(q.recline / Math.PI * 180).toFixed(1)} 101 72)`);
     };
-    // On the car a held jog sends the head unit's own 0x533, copied with only the move field changed, densely
-    // (cancmd.seatHold); parked only. Settings > Debug > Seat move trial overrides the frame rate for tuning.
-    const rate = this.seatTrial || 50;
-    const off = false;
+    // greyed on the car (carcatalog.js moveOff): this car moves the seat only from the physical switch, which the
+    // seat module reads directly -- it does not act on the head unit's ICC_0x533 manual-move request, so a held jog
+    // here moves nothing (confirmed on the car: the request goes out clean and the seat stays put, in both
+    // directions, whether built from scratch or copied from the head unit's own frame). The Debug > Seat move trial
+    // still sends it at a chosen rate for anyone reverse-engineering it; the position still reads back either way.
+    const trial = this.seatTrial;
+    const off = !!(c.moveOff && this.inApp && !trial);
     const nudge = (key, sign) => {
       if (off) return;
       if (this.liveIds.has(id)) return;   // the car's seat moves by the car's request below, and reports where it is
@@ -1278,17 +1281,18 @@ export class CarControls {
       let timer = 0, holding = false;
       const sig = c.moves && c.moves[key];
       const start = () => {
+        if (off) { this.app.toast(c.moveOff); return; }
         if (sig && this.inApp) {
           if (!this.sending) { this.app.toast(this.cmd.why || 'Not connected to the car'); return; }
-          if (!this.trialParked) { this.app.toast('Seat move: parked only (gear P)'); return; }
-          holding = this.cmd.seatHold(MSG.SEATMOVE, { [sig]: sign > 0 ? 1 : 2 }, rate);
+          if (!this.trialParked) { this.app.toast('Seat move trial: parked only (gear P)'); return; }
+          holding = this.cmd.hold(MSG.SEATMOVE, { [sig]: sign > 0 ? 1 : 2 }, trial || undefined);
           setClass(b, 'held', holding);
           return;
         }
         if (sig === undefined && c.moves && this.inApp) { this.app.toast('The head unit has no message for this adjuster'); return; }
         nudge(key, sign); clearInterval(timer); timer = setInterval(() => nudge(key, sign), 90);
       };
-      const stop = () => { clearInterval(timer); if (holding) { holding = false; setClass(b, 'held', false); this.cmd.seatRelease(MSG.SEATMOVE); } };
+      const stop = () => { clearInterval(timer); if (holding) { holding = false; setClass(b, 'held', false); this.cmd.release(MSG.SEATMOVE); } };
       b.addEventListener('pointerdown', (e) => { e.preventDefault(); start(); });
       for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
       b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!sig || !this.inApp) nudge(key, sign); } });
