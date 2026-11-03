@@ -50,6 +50,15 @@ html[data-layout]:not([data-layout="classic"]) .replaybar { right: 12px; left: 1
 html[data-layout="mapcenter"] .hl-tiles, html[data-layout="mapcenter"] .hl-pages { display: none; }
 html[data-layout="mapcenter"] .musiccard { left: 0; right: 0; bottom: 112px; width: auto; }
 
+/* ---------- Ocean Native (Option D): the glance strip/bar skinned to the stock FiskerOS look -- solid bars (no
+   glass blur), the scene in its default view. A skin over the glance structure, as the UX report recommended. ---------- */
+html[data-layout="native"] .hl-tiles, html[data-layout="native"] .hl-pages { display: none; }
+html[data-layout="native"] .hl-strip, html[data-layout="native"] .hl-bar {
+  background: var(--glass-bg-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-layout="native"] .hl-strip { box-shadow: 0 1px 0 var(--glass-border); }
+html[data-layout="native"] .hl-bar { box-shadow: 0 -1px 0 var(--glass-border); }
+html[data-layout="native"] .musiccard { left: 0; right: 0; bottom: 112px; width: auto; }
+
 /* the strip: the essential driving set in one band at the top (Euro NCAP's line of sight), the status card's own
    elements laid out in a row */
 .hl-strip { position: absolute; left: 0; right: 0; top: 0; height: 96px; z-index: 8; display: flex; align-items: center; gap: 18px; padding: 0 20px;

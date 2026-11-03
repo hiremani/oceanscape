@@ -142,7 +142,7 @@ export class HudLayout {
       const view = this.buttons.get('view');
       this._move('#viewmenu', view.node.querySelector('.hl-viewslot'));
       $('#viewmenu')?.classList.add('hidden');
-      const barLay = want === 'mapcenter' ? 'glance' : want;   // Map Centre carries the glance bar
+      const barLay = (want === 'mapcenter' || want === 'native') ? 'glance' : want;   // Map Centre and Ocean Native carry the glance bar
       for (const { def, node } of this.buttons.values()) setClass(node, 'hidden', !def.layouts.includes(barLay));
     }
     // Map Centre holds the camera straight down over the map; the others release it to the user's view setting
