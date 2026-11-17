@@ -6,6 +6,7 @@ import { OCEAN_PAINTS, OCEAN_WHEELS, oceanPaint } from './models.js';
 import { RX_IDS } from './ibus_tables.js';
 import { CommaPanel } from './comma.js';
 import { currentCountry } from './regional.js';
+import { profileState, profileRows, limitOffsets, provenance } from './profile_view.js';
 
 // tab -> what it needs the comma for
 const OFFLINE_TABS = new Map([
@@ -217,8 +218,10 @@ export class Settings {
 
   async renderDriving() {
     const body = this.body;
-    let p;
-    try { p = await api('/api/params'); } catch (e) { body.append(el('div.banner.bad', e.message)); return; }
+    let p, prof;
+    try {
+      [p, prof] = await Promise.all([api('/api/params'), api('/api/profiles').catch(e => e)]);
+    } catch (e) { body.append(el('div.banner.bad', e.message)); return; }
     if (this.tab !== 'driving') return;
     const put = async (obj) => {
       try { await api('/api/params', { method: 'PUT', body: obj }); this.app.toast('Saved'); this.renderDrivingSoon(); } catch (e) { this.app.toast(e.message); }
@@ -228,6 +231,7 @@ export class Settings {
       el('p.desc', 'openpilot driving personality (used with openpilot longitudinal control). The Fisker ADAS time gap is set with the steering wheel buttons.'),
       this.app.segmented([['0', 'Aggressive'], ['1', 'Standard'], ['2', 'Relaxed']], String(p.LongitudinalPersonality ?? 1), v => put({ LongitudinalPersonality: Number(v) })),
     ));
+    body.append(this.profileSection(profileState(prof)));
     if (typeof p.FiskerACCTerrain === 'boolean') {
       const toggles = [['FiskerACCAutoSpeed', 'ACC auto speed', 'Set speed follows the speed limit.'],
         ['FiskerACCTerrain', 'ACC Terrain Mode', 'The factory ACC terrain setting. Its effect on driving behavior is unverified.']];
@@ -300,6 +304,77 @@ export class Settings {
   }
 
   renderDrivingSoon() { setTimeout(() => { if (this.tab === 'driving') this.show('driving', true); }, 150); }
+
+  // ---- driver profile (the comma's /api/profiles; profile_view.js) --------------------------------
+
+  // The driver's own habits, measured from their drives, that openpilot's speed planner drives by when it is on.
+  // Only with openpilot longitudinal control: with the car's own ACC in charge it changes nothing.
+  profileSection(s) {
+    const h = el('h3', 'Driver profile');
+    if (s.kind === 'unsupported') {
+      return el('div.section', h, el('p.desc', 'This comma\'s software has no driver profiles.'));
+    }
+    if (s.kind === 'unbuilt') {
+      return el('div.section', h, el('p.desc', 'The comma\'s settings don\'t include driver profiles yet. Rebuild openpilot on the comma.'));
+    }
+    const putProfile = async (obj) => {
+      try {
+        await api('/api/profiles', { method: 'PUT', body: obj });
+        this.app.toast('Saved');
+      } catch (e) { this.app.toast(e.message); }
+      this.renderDrivingSoon();   // shows the comma's state, which also puts back a refused change
+    };
+    // the comma refuses changes while the car moves: grey the controls out then
+    const lock = (node) => {
+      if (!s.editable) $$('input, button, select', node).forEach(c => { c.disabled = true; });
+      if (!s.editable && node.matches('input, button, select')) node.disabled = true;
+      return node;
+    };
+    const parts = [h, el('p.desc', 'Your own habits, measured from your drives. When on, openpilot\'s speed control uses them ' +
+      'in place of its defaults. Only with openpilot longitudinal control.')];
+    if (!s.editable) parts.push(el('div.banner.warn', 'Stop the car to change the profile.'));
+
+    const speedSwitch = this.app.switch(s.speed, v => putProfile({ speed: v }));
+    if (!s.enabled) $('input', speedSwitch).disabled = true;   // it only applies with the profile on
+    const rows = [
+      el('div.row', el('div.lbl', el('b', 'Drive by my profile'), el('small', 'Following gap, curves, stops, turns and narrow streets.')),
+        lock(this.app.switch(s.enabled, v => putProfile({ enabled: v })))),
+      el('div.row' + (s.enabled ? '' : '.locked'), el('div.lbl', el('b', 'Speed: limit + my offset'),
+        el('small', 'Cap cruising speed at the posted limit plus your usual offset for it.')), lock(speedSwitch)),
+    ];
+    if (s.names.length) {
+      const pick = (name) => { if (name !== s.activeName) putProfile({ active: name }); };
+      const picker = s.names.length <= 4
+        ? this.app.segmented(s.names.map(n => [n, n]), s.activeName, pick)
+        : el('select', { onchange: (e) => pick(e.target.value) }, s.names.map(n => el('option', { value: n, selected: n === s.activeName }, n)));
+      rows.push(el('div.row', el('div.lbl', el('b', 'Active profile'), el('small', provenance(s.active && s.active.meta) || ' ')), lock(picker)));
+    }
+    parts.push(el('div.rows', rows));
+
+    if (!s.names.length) {
+      parts.push(el('div.banner', 'No profiles on the comma yet. Make one from your drives with driver_profile_gen.py.'));
+      return el('div.section', parts);
+    }
+    if (s.activeMissing) {
+      parts.push(el('div.banner.warn', `The active profile "${s.activeName}" isn't on the comma, so openpilot uses its defaults. Pick one above.`));
+    }
+
+    // the active profile's values next to the defaults
+    const values = profileRows(s.active, s.defaults).map(r =>
+      el('div.row' + (r.changed ? '.changed' : ''),
+        el('div.lbl', el('b', r.label), el('small', r.desc + (r.note ? ` ${r.note}` : ''))),
+        el('div.pv', el('b', r.text), el('small', r.changed ? `default ${r.defText}` : 'default'))));
+    const offs = limitOffsets(s.active);
+    if (offs.length) {
+      values.push(el('div.row', el('div.lbl', el('b', 'Speed by posted limit'),
+        el('small', 'Your own offset where there was enough driving at that limit. Needs the speed cap.')),
+        el('div.pv.offs', offs.map(o => el('small', `${o.limit}: `, el('b', o.text))))));
+    }
+    // stays open across the re-render after each save
+    parts.push(el('details', { open: !!this.profileOpen, ontoggle: (e) => { this.profileOpen = e.currentTarget.open; } },
+      el('summary', `What "${s.activeName}" changes`), el('div.rows', values)));
+    return el('div.section', parts);
+  }
 
   // the lane confidence right now, under the threshold slider (Display)
   showLaneConf() {

@@ -291,6 +291,14 @@ p.desc b { color: var(--text); font-weight: 600; }
 .switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s; }
 .switch input:checked + span { background: var(--accent); }
 .switch input:checked + span::after { transform: translateX(20px); }
+.switch input:disabled + span { opacity: .45; }
+.seg button:disabled { opacity: .45; }
+/* driver profile values (Settings → Driving): the value, and the default under it */
+.row .pv { flex: none; text-align: right; }
+.row .pv b { display: block; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.row .pv small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.row .pv.offs { max-width: 50%; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 10px; }
+.row .pv.offs small b { display: inline; font-size: 12px; }
 
 .routes .route { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
 .routes .route b { font-size: 14px; }
