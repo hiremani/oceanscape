@@ -1,4 +1,4 @@
-# Oceanfront View internals
+# Oceanscape internals
 
 How the HUD decodes, fuses and draws what it shows: the detail behind the [README](README.md).
 
@@ -56,16 +56,67 @@ holds still when it isn't. Lane lines, stop lines, crosswalks and the headlight 
 same field, so they grow, bend and dissolve with the road. Ground texture and inferred road can be
 turned off under *Display*.
 
-The *Concept* style (*Display → Render style*, `static/js/fabric.js`) draws that ground instead as a sheet of
-perforated fabric, after Territory Studio's original ADAS concepts for the Ocean: one dense mesh in the car
-frame, displaced in its vertex shader by the same road field. Each lane boundary is a soft ridge at its offset
-across the field's reference (the cameras' anchor arc, or the map's centerline and its lane structure), with a
-broad berm along each edge; the lane lines glow along the ridges out of the perforations (the ego lane's solid in
-amber, blue while steering, red for a departure; the others dimmer and dashed as marked), and replace the line
-ribbons and the map's road network. The cars around us are no models but the sheet itself, bulging over each as if
-it were underneath, their tail lights glowing dimly through the cloth; the car we follow sends ripples across the fabric in front of it, green with a long gap
-through yellow and orange to red under a second. The perforations are fixed to the ground and averaged out where
-they'd be under a pixel apart. The HUD drops its cards for type floating on the sheet.
+*Ground style* (*Display*) swaps that ground for prototypes after the Fisker Ocean concept
+(`static/js/groundstyle/`). Perforated is the default; *Flat* keeps the plain ground described above.
+The styles work in two layers. The surface model (`surface.js`) is one sheet fixed to the ground that
+the road and every car (ours included, from its model's height map) push up from below. The road's shape is
+OceanScape's (github.com/benkayuk/oceanscape): a soft ridge along each lane line, dashed or not, our lane's two
+full height and the rest lower, and a broad berm along each edge, at their offsets across the road field's
+reference, so they bend, grow and fade with the road. The cars stand level over it, so a ridge passes under a car
+rather than bending it. It's baked each frame into a height field and is the same for every style. Each style
+(`styles/*.js`: pins, scanlines, perforated, point cloud) is one self-contained module that draws that field. It
+declares its own shaders, colors, light, and a profile of what it needs (how soft the cars' sides are, the painted
+lines raised crisp). Every style lights its surface with the lines' colors: their paint, a halo about 30 cm wide
+and a bloom about a metre wide. The light adds at night and tints by day. To add one, write a module and list it in `index.js`; the setting picks it up,
+and `groundstyle.test.js` checks it keeps to the contract.
+
+While a style is on, the road map takes the lines in the concept's colors, after OceanScape: our lane's
+two lines amber (blue while steering, red for a departure), and the other lines and the edges a dim amber
+(`surface.js CONCEPT_LINES`). The perforated style lights them from under the cloth, so they shine out
+through the perforations. A soft bar of light, 30 cm deep and as wide as the car, lies 30–60 cm behind the car we
+follow, colored by the time gap (green to red); it fades in and out over about a second as that car is gained or lost.
+Every 5 s a sonar pulse, an arc, leaves it and runs about 2 m out toward us, fading.
+The sheet reaches past where the fog has faded it into the background, and its far edges fade too, so
+the ground never ends in a line. Perforated's sky follows the view direction, so its horizon color
+meets the fogged ground at the real horizon.
+
+The blind-spot warning (`static/js/blindspot.js`) turns our lane's line on that side red along the car,
+fading out ahead of and behind it. With no line on that side, red ripples run out from the car's side.
+In the ground styles both go into the road map, so they glow like the lines.
+
+*Layout* (*Display*) has a wide strip for the HUD beside another app in split screen (the top third
+of the Ocean's portrait screen). *Auto* picks it when the window is at least 1.4 times as wide as
+it's tall and leaves most of the screen's height to something else (`main.js updateLayout`). The car
+sits in the middle of the strip, the status is pared down to the speed, gear, steering, set speed and
+limit, and the energy card to the battery and the power bar. In the wide strip the *Drum horizon* bends the whole
+3D view over a drum under the car (`static/js/drum.js`), so the road falls away to a close horizon as
+in the concept's renders. Every vertex shader is bent after its projection, so it needs nothing from
+the materials; orthographic renders (the ground styles' maps) and the sky stay flat. The ground, and
+what lies on it, fades into a thin haze over the last 2° below the drum's horizon, so it ends softly
+(`drum.js drumFade`).
+
+The status card (speed, gear, assist) sits on the driver's side with no panel behind it. Its mirror,
+the energy card, sits on the other side and shows:
+- the time, the battery's usable charge and range, and the outside temperature, read from the car's
+  own buses (`carstate.js`);
+- the power bar up its outer edge, the card's height.
+
+A tap on the bar shows the last minute at the card's foot. A tap on the charge opens *Battery &
+energy* (`energy.js`): the battery's figures over the VCU's energy counters. The chips sit under the
+energy card.
+
+The controls are on the driver's side too: one menu button at the bottom (`main.js bindViewdock`).
+Pressing it opens the settings, the comma camera and the camera views above it. It closes on a
+second press, a tap elsewhere, after a button has done its job, or after ten seconds left alone.
+
+What the head unit is playing runs along the bottom beside the button (`infotainment.js`), as on the
+concept boards. Play/pause and next sit next to the menu button, then the title, the artist and
+album, and a hairline of progress. At night it's type on the scene; by day it sits on a light veil.
+The buttons' icons are small, but each one's touch area is 76 × 72 px and reaches down to the screen's
+edge. In replay, the replay bar sits above it.
+
+*Driver's side* (*Display*) follows the traffic side by default: traffic on the left puts the driver
+on the right. The whole layout mirrors for a driver on the right (`app.css html.rhd`).
 
 Traffic lights, signs and road markings (`static/js/furniture.js`) come from the car's ADAS camera
 only; sunnypilot adds map speed limits (`liveMapDataSP`) but no signs or lights. The camera reports
@@ -116,9 +167,42 @@ ego pose dead-reckoned from ESP wheel speed and the YRS yaw-rate gyro, and weigh
 noise model (radar: range and Doppler; camera: bearing, class, size; openpilot leads only corroborate
 on this car). The view anchors the objects to the ground, so parked cars stay put through turns; the
 scene's own ego motion now uses the gyro too. *Raw sources* draws each source as it reports. Radar
-tracks younger than 1.3 s are hidden unless *All radar tracks* is on. A world object is drawn with its
-center half a car length beyond the reported point along the car's own axis (half a width when seen
-side-on), since every source reports the face nearest us.
+tracks younger than 1.3 s are hidden unless *All radar tracks* is on.
+
+Each world object is physical (`static/js/world/physics.js`). Its track is an extended Kalman filter over a
+kinematic bicycle: its footprint's center, heading, speed along that heading, acceleration and path
+curvature. It turns only by driving along a curve, so it can't spin in place, and its velocity is along its
+heading, so it can't slide sideways. After each step the state is held to what its class and mass can do
+(`LIMITS`):
+- the tightest turning circle;
+- about 0.8 g of lateral grip;
+- acceleration limited by power over mass, so it falls with speed;
+- braking grip;
+- a top speed, and reversing only slowly.
+
+An object first seen standing is taken to face our way loosely; it turns itself round once it's seen
+coming toward us. Pedestrians and animals walk: they can turn on the spot but not move at car speeds.
+
+The sources report the face nearest us. The track keeps the center, moving each report back along the line
+of sight by the box's half extent there. A radar point target with no class or size stays a point.
+
+What's drawn is a simulated body for each track (`SimBody`): a bicycle steered by pure pursuit and driven by
+a speed controller toward the filter's estimate, under the same limits. So the noise in the estimate never
+shows as a car jumping, sliding or turning in place. A new object is drawn at its estimate until its speed is
+known (about its first second). One that falls more than 6 m (or 0.4 s of travel) behind is put back.
+
+No two vehicles share a place (`separate()`), and none overlaps our car. Overlapping boxes are pushed
+apart along the shallowest axis, the less certain moving more. Two that overlap most of a car and move
+alike are one object seen twice, and are merged.
+
+The snapshot gives each object's center (`cx`, `cy`), its signed speed `v`, `accel`, `curvature`,
+`yawRate`, front-wheel `steer` and an estimated `mass`. The view carries it along that curve between
+snapshots. `tools/track_eval.mjs ticks.jsonl` scores a recorded drive for spinning, slip, acceleration,
+lateral grip, jitter and overlaps. Against the constant-velocity tracker it replaced, on the demo drive:
+- overlapping vehicle pairs went from 174 to 0;
+- 95th-percentile slip went from 0.9° to 0.3°;
+- steps over 6 m/s² went from 16% to 5%;
+- 95th-percentile jitter went from 1.6 cm to 1.0 cm.
 
 Before fusing, each source is corrected by the *measured sensor calibration* (`MEASURED_CALIBRATION` in
 `world_model.js`, *Display → Geometry calibration*, on by default). Its values come from replaying

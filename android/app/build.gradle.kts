@@ -40,12 +40,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        // Ben's build, OceanScape: its own package, so it installs beside moistpope's Oceanfront View (ai.sunnypilot.webhud)
-        applicationId = "ai.sunnypilot.oceanscape"
+        applicationId = "ai.sunnypilot.webhud"
         minSdk = 26
         targetSdk = 36
-        versionCode = 24
-        versionName = "1.3.18"
+        versionCode = 25
+        versionName = "1.6.5"
     }
 
     buildTypes {

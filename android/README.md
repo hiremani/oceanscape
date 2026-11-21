@@ -1,4 +1,4 @@
-# Oceanfront View on the car's screen
+# Oceanscape on the car's screen
 
 An Android app that shows the [HUD page](../README.md) full screen on the car's own screen (Pulse,
 the add-on board). The page and everything it needs (its scripts, three.js, the car model, the DBCs)
@@ -33,7 +33,7 @@ a new hotspot subnet each time the hotspot starts).
 
 ## Staying connected
 
-The page is served by the app at `http://127.0.0.1:18089` (`LocalServer`): its files from the APK's
+The page is served by the app at `http://127.0.0.1:18088` (`LocalServer`): its files from the APK's
 assets (`assets/www/`, copied in from the repo at build time), and `/api/...`, the `/ws` stream and the camera view's `/video`
 relayed to the comma byte for byte (HTTP and the WebSocket alike). So:
 
@@ -80,8 +80,10 @@ media sessions and notifications:
 - **Media:** every active media session is followed, and the card shows the one playing, else the most
   recent: title, artist, album, art, position and length. Its buttons go to that session's controls.
 - **Navigation:** the notification in the *navigation* category, or an ongoing one from a known
-  navigation app (Google Maps, Waze, HERE, Sygic, OsmAnd, MapQuest, Organic Maps). Its words go to the
-  page as they are (title, text, sub text), and the page reads the distance, the maneuver and the street
+  navigation app (Google Maps, Waze, HERE, Sygic, OsmAnd, MapQuest, Organic Maps, ABRP). ABRP's counts
+  only while it gives a distance, as it keeps a notification up while it isn't guiding too (planning,
+  live data). With two apps guiding at once, the most recently updated shows, and the other when it goes.
+  Its words go to the page as they are (title, text, sub text, text lines), and the page reads the distance, the maneuver and the street
   from them, along with the maneuver's picture (Google Maps draws it as the large icon). So the reading
   can be fixed by updating openpilot, without reinstalling the app.
 
@@ -111,14 +113,17 @@ mirror, so the HUD runs from the car alone when the comma is away (see the [main
 
 **Sending.** The page can send the head unit's own control messages (windows, lock, liftgate, sunroof,
 mirrors, lamps, climate, seat heat and moves, the locking settings) through `window.WebHudApp.canSend`.
-Only the IDs in `CanIds.TX` go out, and that allowlist is enforced twice: in `CanBridge.send` and in
-the helper, which only opens a transmit socket for the IDs it was given on its command line. A frame is
-refused when the bus is silent (the car asleep, or the link down) or past 60 frames a second, and every
-frame sent is logged (`adb logcat -s WebHud`, `CAN send`, and the helper's `tx ... ok`). The head unit's
-cyclic state messages (drive mode and charging, units and brightness, ambient light and California
-Mode) are never sent: the head unit would send its own values right back, and some carry an E2E
-counter. Nor are the audio messages, whose one frame carries every volume and the mute. What the app
-sends never loops back into what it reads.
+Only the IDs in `CanIds.TX` go out, and that allowlist is enforced twice: in `CanBridge.send` and in the
+helper, which only opens a transmit socket for the IDs it was given on its command line. A frame is
+refused when the bus is silent (the car asleep, or the link down) or past 60 frames a second. Silent
+means no frame on that bus has changed for 3 s: the helper's once-a-second repeats of an unchanged frame
+(below) go on after the bus falls quiet, so they don't count, while an awake bus always has something
+changing, since most messages carry an alive counter or a checksum. Every frame sent is logged (`adb
+logcat -s WebHud`, `CAN send`, and the helper's `tx ... ok`). The head unit's cyclic state messages
+(drive mode and charging, units and brightness, ambient light and California Mode) are never sent: the
+head unit would send its own values right back, and some carry an E2E counter. Nor are the audio
+messages, whose one frame carries every volume and the mute. What the app sends never loops back into
+what it reads.
 
 The reading and sending are done by a bundled helper, `libcanbridge.so` (`canbridge/main.go`): a plain
 executable shipped as a `.so` so Android installs it into the app's `nativeLibraryDir`, the one directory
@@ -128,6 +133,15 @@ payload changes and repeats every ID's current frame once a second, so the page 
 (climate, seat heat, a window's position) from a silent bus. Frames to send come to it on stdin, one
 per line, and it answers each on stdout. The page asks for the current state when it loads
 (`window.WebHudApp.canState()`), then gets frames as `webhud:can` events, ~15 Hz batches.
+
+Pulse's own app reloads the CAN driver now and then (`rmmod`, `insmod mcp251x.ko`: on its start, for
+one), which deletes `can1` and `can2` and makes new ones. A socket bound to the old interface never
+reads again, so the helper ends when a read fails (the reason goes to the log, `CAN helper: read can1:
+...`), and the app starts a new one on the new interfaces, after a second for a helper that had been
+running a while. An interface that is only down keeps its sockets, so that's waited out (`network is
+down: waiting for it`) while the other bus reads on. Don't take `can1` or `can2` down by hand to test
+this: Pulse's mcp251x driver can't bring a chip back up after `ip link set ... down` ("didn't enter in
+config mode"); only a driver reload does (the Pulse app's *Reload CAN bus*).
 
 Rebuild the helper (needs only the Go toolchain) with `canbridge/build.sh`. `adb logcat -s WebHud`
 shows `CAN helper: ready` and `CAN frames flowing` when it's up.
@@ -139,8 +153,9 @@ buffer 1), and a write to `apply_filters` programs them; an ID passes when `(id 
 mask)` for some filter of a buffer. Its defaults pass only parts of the ID range (IBUS1 roughly
 0x200–0x3FF and 0x500–0x7FF, IBUS2 0x200–0x23F, 0x300–0x37F, 0x500–0x53F, 0x580–0x5BF), which loses the
 seat and mirror positions (0x4F3, 0x4F5), the liftgate (0x471), the steering angle and yaw rate (0x1C2,
-0x112), the battery current (0xE9), the charging times (0x630, 0x634) and the odometer (0x641). So at
-start `HwFilters` writes the plan in `CanIds.HW_FILTERS` instead: `gen_ibus.py` searches the tightest
+0x112), the battery current (0xE9), the charging times (0x630, 0x634) and the odometer (0x641). So
+before each helper starts (a driver reload puts the defaults back) `HwFilters` writes the plan in
+`CanIds.HW_FILTERS` instead: `gen_ibus.py` searches the tightest
 masks and filters that let every ID in `CanIds.RX` through (IBUS1 0x200–0x5FF plus four 8-ID windows
 in 0x100–0x1FF, IBUS2 0x000–0x3FF plus 0x500–0x53F, 0x580–0x5BF, 0x600–0x67F). The files belong to
 root, so it goes through the app's root shell (`Link.root`); without root the driver's own values stay
@@ -215,13 +230,13 @@ same one after installing it): `versionName` in `app/build.gradle.kts` to the re
 tag is `v<versionName>`), and `versionCode` up by one. `tools/release.sh` does that and the rest:
 
 ```
-tools/release.sh                 # 1.0 -> 1.1: bump, run the tests, build, commit "Oceanfront View v1.1", tag v1.1
+tools/release.sh                 # 1.0 -> 1.1: bump, run the tests, build, commit "Oceanscape v1.1", tag v1.1
 tools/release.sh patch           # 1.1 -> 1.1.1 (or major, or a version: tools/release.sh 2.0)
 tools/release.sh --publish       # ...then push the commit and the tag and create the GitHub release with the APK (gh)
 ```
 
 It wants a clean checkout, puts the version back if the tests or the build fail, and names the APK
-`app/build/outputs/apk/release/oceanfront-view-v<version>.apk`. Without `--publish` it prints the
+`app/build/outputs/apk/release/oceanscape-v<version>.apk`. Without `--publish` it prints the
 push and `gh release create` commands to run.
 
 Build releases with the same debug key as the APKs already on cars (the `~/.android/debug.keystore`

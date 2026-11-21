@@ -5,6 +5,7 @@ import { $, $$, el, api, fmtBytes, fmtTime, prettyLabel, prettySignal, iconSvg }
 import { OCEAN_PAINTS, OCEAN_WHEELS, oceanPaint } from './models.js';
 import { RX_IDS } from './ibus_tables.js';
 import { CommaPanel } from './comma.js';
+import { GROUND_STYLES } from './groundstyle/index.js';
 import { currentCountry } from './regional.js';
 import { profileState, profileRows, limitOffsets, provenance, versionsState } from './profile_view.js';
 
@@ -443,11 +444,20 @@ export class Settings {
     const body = this.body;
     body.append(el('div.section', el('h3', 'Theme'),
       this.app.segmented([['auto', 'Auto'], ['light', 'Day'], ['dark', 'Night']], s.theme, v => set('theme', v))));
-    body.append(el('div.section', el('h3', 'Render style'),
-      el('p.desc', 'Original: the flat road with its lines and the cars as models. Concept: the road as a sheet of perforated ' +
-        'fabric, the lanes glowing ridges in it and the cars shapes under it, after Territory Studio\'s original ADAS concepts ' +
-        'for the Ocean.'),
-      this.app.segmented([['original', 'Original'], ['concept', 'Concept']], s.style === 'concept' ? 'concept' : 'original', v => set('style', v))));
+    body.append(el('div.section', el('h3', 'Layout'),
+      el('p.desc', 'Wide strip: for a short band across the screen, like the HUD beside another app in split screen. The car in the ' +
+        'middle, only the speed, gear, steering, set speed and limit in the driver\'s corner and the battery and power in the other. Auto picks it ' +
+        'when the window is a band that leaves most of the screen\'s height to something else.'),
+      this.app.segmented([['auto', 'Auto'], ['standard', 'Standard'], ['wide', 'Wide strip']], s.layout || 'auto', v => set('layout', v))));
+    body.append(el('div.section', el('h3', 'Drum horizon'),
+      el('p.desc', 'In the wide strip: the road bends over a drum under the car and falls away ahead to a close horizon, as in the ' +
+        'Fisker concept\'s renders. The chase view sits lower to look over it. Flat again while the car controls are open.'),
+      this.app.segmented([['off', 'Flat'], ['on', 'Drum']], s.drum ? 'on' : 'off', v => set('drum', v === 'on'))));
+    body.append(el('div.section', el('h3', 'Ground style'),
+      el('p.desc', 'Prototypes after the Fisker Ocean concept: the scene as one surface fixed to the ground, which the road, its lines and ' +
+        'every car (yours included) push up from below, like a blanket. ' + GROUND_STYLES.map(g => g.blurb).filter(Boolean).join(' ') +
+        ' Opening the car controls shows the real car.'),
+      this.app.segmented(GROUND_STYLES.map(g => [g.id, g.label]), s.groundStyle || 'perforated', v => set('groundStyle', v))));
     body.append(el('div.section', el('h3', 'Speed units'),
       this.app.segmented([['auto', 'Follow cluster'], ['mph', 'mph'], ['kmh', 'km/h']], s.units, v => set('units', v))));
     // the country the car is in sets the side of the road, the sign units and the sign (region.js); each can be
@@ -472,6 +482,9 @@ export class Settings {
         el('div.section', el('h3', 'Speed-sign style'),
           el('p.desc', 'The speed limit sign drawn on the HUD and by the road.'),
           this.app.segmented([['auto', auto], ['round', 'Round (UK/EU)'], ['us', 'US']], s.signStyle || 'auto', v => set('signStyle', v))))));
+    body.append(el('div.section', el('h3', 'Driver\'s side'),
+      el('p.desc', 'The status card and the controls (the menu, what\'s playing, the replay) go on the driver\'s side, the energy card and the chips on the other. Follow traffic puts the driver on the right where traffic keeps left.'),
+      this.app.segmented([['auto', 'Follow traffic'], ['left', 'Left'], ['right', 'Right']], s.driverSide || 'auto', v => set('driverSide', v))));
     const paint = oceanPaint(s.egoPaint);
     body.append(el('div.section', el('h3', 'Paint', el('small', `${paint.name} · ${paint.finish.toLowerCase()}`)),
       el('div.swatches', OCEAN_PAINTS.map(p => el('button.swatch' + (p === paint ? '.on' : ''),
@@ -849,7 +862,7 @@ export class Settings {
   async renderAbout() {
     const body = this.body;
     // the app's version and its updates, as on the car controls' Software sheet (appupdate.js)
-    body.append(el('div.section', el('h3', 'OceanScape'), this.app.car.appUpdate.render(true)));
+    body.append(el('div.section', el('h3', 'Oceanscape'), this.app.car.appUpdate.render(true)));
     const src = { car: this.app.state && this.app.state.comma ? "The car's IBUS1/IBUS2, with the comma's ADAS bus, radar and openpilot" : "The car's IBUS1/IBUS2",
       comma: 'The comma alone (no car buses here)', replay: 'A drive the comma is replaying', none: 'Nothing yet: the car is asleep, or this isn\'t the car\'s screen' }[this.app.source];
     body.append(el('div.section', el('h3', 'Driving data'), el('div.kv', el('span', 'Source'), el('span', src))));

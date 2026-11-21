@@ -21,8 +21,8 @@ import kotlin.concurrent.thread
  *
  * It can also send: the head unit's own control messages (windows, locks, climate, seats...), and only
  * those. The allowlist is enforced twice, here and in the helper that holds the sockets. Every frame
- * sent is logged. Nothing is sent while a bus is asleep (nothing received on it lately) or faster than
- * [TX_PER_SECOND] frames a second.
+ * sent is logged. Nothing is sent while a bus is asleep (nothing changing on it lately, see [awake]) or
+ * faster than [TX_PER_SECOND] frames a second.
  *
  * The reading and sending are done by the bundled `libcanbridge.so` helper (canbridge/main.go): a
  * plain executable shipped as a .so so it lands in the app's nativeLibraryDir, the one place an app may
@@ -37,7 +37,7 @@ object CanBridge {
 
     // interface -> bus. Pulse boards number their CAN interfaces differently: the original Orange Pi 5 Pro
     // units have IBUS1 = can1, IBUS2 = can2; the European Radxa Rock 5C units IBUS1 = can0, IBUS2 = can1.
-    // Picked from what's present when the link starts ([busMap]).
+    // Picked from what's present each time the helper starts ([busMap]).
     @Volatile private var BUS: Map<String, String> = busMap(canPresent())
     private val IFACE: Map<String, String> get() = BUS.entries.associate { (k, v) -> v to k }
 
@@ -46,7 +46,7 @@ object CanBridge {
 
     private val listeners = CopyOnWriteArraySet<Listener>()
     private val latest = LinkedHashMap<String, JSONObject>()   // "bus/addr" -> last frame, for a new page
-    private val busSeen = HashMap<String, Long>()               // iface -> when a frame last came in
+    private val busSeen = HashMap<String, Long>()               // iface -> when a frame last changed on it
     private var proc: Process? = null
     private var stdin: BufferedWriter? = null
     @Volatile private var running = false
@@ -90,13 +90,7 @@ object CanBridge {
         }
         running = true
         val root = Link.get(context).root
-        thread(name = "webhud-can", isDaemon = true) {
-            // first open the chips' hardware filters so every ID in CanIds.RX can reach the helper
-            val why = HwFilters.apply(root)
-            if (why == null) Log.i(TAG, "CAN hardware filters pass every ID we read")
-            else Log.w(TAG, "CAN hardware filters left as they are ($why): some read-outs stay empty")
-            run(bin)
-        }
+        thread(name = "webhud-can", isDaemon = true) { run(bin, root) }
     }
 
     @Synchronized
@@ -107,7 +101,10 @@ object CanBridge {
         stdin = null
     }
 
-    /** Whether frames are arriving on [bus] ("IBUS1" / "IBUS2"): the car is awake and the link works. */
+    /**
+     * Whether [bus] ("IBUS1" / "IBUS2") is live: some frame on it changed in the last [maxAgeMs], so the car
+     * is awake and the link works. The helper's repeats of an unchanged frame don't count ([isSignOfLife]).
+     */
     fun awake(bus: String, maxAgeMs: Long = 3000): Boolean {
         val iface = IFACE[bus] ?: return false
         val t = synchronized(busSeen) { busSeen[iface] } ?: return false
@@ -146,15 +143,27 @@ object CanBridge {
         return null
     }
 
-    private fun run(bin: String) {
+    /**
+     * Runs the helper, and a new one whenever it ends. It ends on its own when its interfaces go away: Pulse's
+     * app reloads the CAN driver (rmmod, insmod), which makes new interfaces (can1/can2, or can0/can1 on a
+     * Rock 5C) and puts the driver's own hardware
+     * filters back, so they're opened again first, every time.
+     */
+    private fun run(bin: String, root: RootShell) {
         var tries = 0
         while (running) {
+            // the chips' hardware filters, so every ID in CanIds.RX can reach the helper
+            val why = HwFilters.apply(root)
+            if (why == null) Log.i(TAG, "CAN hardware filters pass every ID we read")
+            else Log.w(TAG, "CAN hardware filters left as they are ($why): some read-outs stay empty")
+            val startedAt = System.currentTimeMillis()
             try {
+                // which numbering this board uses, looked at again after each driver reload
                 BUS = busMap(canPresent())
                 val ifc = IFACE
                 Log.i(TAG, "CAN helper starting ($bin): IBUS1 = ${ifc["IBUS1"]}, IBUS2 = ${ifc["IBUS2"]}")
                 val args = mutableListOf(bin, "${ifc["IBUS1"]}=${CanIds.RX["IBUS1"]!!.hex()}", "${ifc["IBUS2"]}=${CanIds.RX["IBUS2"]!!.hex()}")
-                for ((bus, ids) in CanIds.TX) args += "tx:${IFACE[bus]}=${ids.hex()}"
+                for ((bus, ids) in CanIds.TX) args += "tx:${ifc[bus]}=${ids.hex()}"
                 val p = ProcessBuilder(args).redirectErrorStream(false).start()
                 proc = p
                 stdin = BufferedWriter(OutputStreamWriter(p.outputStream))
@@ -175,7 +184,9 @@ object CanBridge {
             proc?.destroy()   // never two helpers on the bus
             proc = null
             stdin = null
-            if (running) Thread.sleep(minOf(30_000L, 1000L shl minOf(tries++, 5)))   // restart with backoff
+            // restart with backoff, from the start again after a helper that ran fine (the driver reloaded under it)
+            if (System.currentTimeMillis() - startedAt > STEADY_MS) tries = 0
+            if (running) Thread.sleep(minOf(30_000L, 1000L shl minOf(tries++, 5)))
         }
     }
 
@@ -200,9 +211,11 @@ object CanBridge {
             val parts = line.split(' ')
             if (parts.size != 3) continue
             val bus = BUS[parts[0]] ?: continue
-            synchronized(busSeen) { busSeen[parts[0]] = System.currentTimeMillis() }
             val f = JSONObject().put("bus", bus).put("addr", parts[1].toInt(16)).put("data", parts[2])
-            synchronized(latest) { latest[bus + "/" + parts[1]] = f }
+            val held = synchronized(latest) { latest.put(bus + "/" + parts[1], f) }
+            if (isSignOfLife(held?.optString("data"), parts[2])) {
+                synchronized(busSeen) { busSeen[parts[0]] = System.currentTimeMillis() }
+            }
             if (!loggedFirst) { loggedFirst = true; Log.i(TAG, "CAN frames flowing (first: ${f.getString("bus")} ${parts[1]})") }
             batch.add(f)
             // coalesce: flush at ~15 Hz so a burst of changes is one page event
@@ -216,6 +229,14 @@ object CanBridge {
         if (batch.isNotEmpty()) flush(batch)
     }
 
+    /**
+     * Whether a frame shows its bus is awake: its payload [data] differs from [held], the last one held for
+     * that ID (null for none yet). The helper reprints every ID's last frame once a second, forever, even
+     * after the bus has gone quiet, so an identical repeat proves nothing. An awake bus always has frames
+     * changing: most of what we read carries an alive counter or a checksum that moves every cycle.
+     */
+    internal fun isSignOfLife(held: String?, data: String) = held != data
+
     private fun flush(batch: List<JSONObject>) {
         if (batch.isEmpty() || listeners.isEmpty()) return
         val arr = JSONArray()
@@ -227,6 +248,9 @@ object CanBridge {
     private const val TAG = "WebHud"
     private const val TX_PER_SECOND = 60
     private const val TX_LOG = 40
+    private const val FLUSH_MS = 66L
+    private const val FAST_FLUSH_MS = 16L
+    private const val STEADY_MS = 30_000L   // a helper that ran this long was working
 }
 
 /** Which interface carries which bus, from the CAN interfaces present: can2 there = Orange Pi numbering, else can0/can1. */
