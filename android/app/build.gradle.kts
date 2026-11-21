@@ -40,7 +40,9 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "ai.sunnypilot.webhud"
+        // mallik-hud's build: its own package, so it installs beside Pulse's app, moistpope's Oceanscape
+        // (ai.sunnypilot.webhud), Ben's OceanScape (ai.sunnypilot.oceanscape) and pulse-coexist (...oceanscape.hiremani)
+        applicationId = "ai.sunnypilot.oceanscape.mallik"
         minSdk = 26
         targetSdk = 36
         versionCode = 25

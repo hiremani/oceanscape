@@ -465,7 +465,7 @@ class LocalServer(
     companion object {
         private const val TAG = "WebHud"
         /** Fixed, so the page's origin and its saved settings stay the same from launch to launch. */
-        const val PREFERRED_PORT = 18088
+        const val PREFERRED_PORT = 18091   // not 18088 (moistpope), 18089 (Ben) or 18090 (pulse-coexist)
         const val WWW = "www"
         /** Ordnance Survey requests a month when the page sends no cap of its own. */
         const val OS_CAP = 5000
