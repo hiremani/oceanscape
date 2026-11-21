@@ -94,3 +94,45 @@ export function limitOffsets(active) {
     .sort((a, b) => a[0] - b[0])
     .map(([limit, v]) => ({ limit, text: fmtValue('town_offset_mph', v, 'mph') }));
 }
+
+// ---- kept versions (the comma's GET /api/profiles/versions; sunnypilot profile_versions.py) -------------------------
+// Every install on the comma keeps what it replaced, so the last few versions can be put back from here.
+
+const LABELS = Object.fromEntries(PROFILE_FIELDS.map(([key, label, unit]) => [key, [label, unit]]));
+
+/** A field's label and unit; the fields the section doesn't list get their key in words. */
+export function fieldLabel(key) {
+  if (LABELS[key]) return LABELS[key];
+  const unit = (key.match(/_(mph|m|s|deg_s)$/) || [])[1] || '';
+  const words = key.replace(/_(mph|m|s|deg_s)$/, '').replace(/_/g, ' ');
+  return [words.charAt(0).toUpperCase() + words.slice(1), unit === 'deg_s' ? '°/s' : unit];
+}
+
+/** What differs from `base` in `values`: [{key, label, from, to}], numeric fields only, by size of change. */
+export function versionDiff(values, base) {
+  if (!values || !base) return [];
+  const out = [];
+  for (const [key, v] of Object.entries(values)) {
+    const b = base[key];
+    if (typeof v !== 'number' || typeof b !== 'number' || Math.abs(v - b) < 1e-6) continue;
+    const [label, unit] = fieldLabel(key);
+    out.push({ key, label, from: fmtValue(key, b, unit), to: fmtValue(key, v, unit), size: Math.abs(v - b) / (Math.abs(b) || 1) });
+  }
+  return out.sort((x, y) => y.size - x.size);
+}
+
+/** The versions section's state from GET /api/profiles/versions (or the error it threw):
+ *  {kind: 'unsupported' | 'ok', editable, versions: [{id, when, label, source, live, diff}]}. Each diff is against the
+ *  version in use (or, when the live file isn't a kept version, the active profile's values). */
+export function versionsState(resp, activeValues) {
+  if (!resp || resp instanceof Error || resp.error || !Array.isArray(resp.versions)) return { kind: 'unsupported' };
+  const live = resp.versions.find(v => v.live);
+  const base = (live && live.values) || activeValues || null;
+  const versions = resp.versions.map(v => {
+    const d = new Date((v.created || 0) * 1000);
+    const when = v.created ? d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+    return { id: v.id, when, label: v.label || '', source: v.source || '', live: !!v.live,
+      diff: v.live ? [] : versionDiff(v.values, base) };
+  });
+  return { kind: 'ok', editable: resp.editable !== false, keep: resp.keep || versions.length, versions, liveKept: !!live };
+}

@@ -6,7 +6,7 @@ import { OCEAN_PAINTS, OCEAN_WHEELS, oceanPaint } from './models.js';
 import { RX_IDS } from './ibus_tables.js';
 import { CommaPanel } from './comma.js';
 import { currentCountry } from './regional.js';
-import { profileState, profileRows, limitOffsets, provenance } from './profile_view.js';
+import { profileState, profileRows, limitOffsets, provenance, versionsState } from './profile_view.js';
 
 // tab -> what it needs the comma for
 const OFFLINE_TABS = new Map([
@@ -231,7 +231,13 @@ export class Settings {
       el('p.desc', 'openpilot driving personality (used with openpilot longitudinal control). The Fisker ADAS time gap is set with the steering wheel buttons.'),
       this.app.segmented([['0', 'Aggressive'], ['1', 'Standard'], ['2', 'Relaxed']], String(p.LongitudinalPersonality ?? 1), v => put({ LongitudinalPersonality: Number(v) })),
     ));
-    body.append(this.profileSection(profileState(prof)));
+    const ps = profileState(prof);
+    let vers = null;
+    if (ps.kind === 'ok' && ps.activeName) {
+      vers = await api(`/api/profiles/versions?name=${encodeURIComponent(ps.activeName)}`).catch(e => e);
+      if (this.tab !== 'driving') return;
+    }
+    body.append(this.profileSection(ps, versionsState(vers, ps.active && ps.active.values)));
     if (typeof p.FiskerACCTerrain === 'boolean') {
       const toggles = [['FiskerACCAutoSpeed', 'ACC auto speed', 'Set speed follows the speed limit.'],
         ['FiskerACCTerrain', 'ACC Terrain Mode', 'The factory ACC terrain setting. Its effect on driving behavior is unverified.']];
@@ -309,7 +315,7 @@ export class Settings {
 
   // The driver's own habits, measured from their drives, that openpilot's speed planner drives by when it is on.
   // Only with openpilot longitudinal control: with the car's own ACC in charge it changes nothing.
-  profileSection(s) {
+  profileSection(s, vs = { kind: 'unsupported' }) {
     const h = el('h3', 'Driver profile');
     if (s.kind === 'unsupported') {
       return el('div.section', h, el('p.desc', 'This comma\'s software has no driver profiles.'));
@@ -373,7 +379,38 @@ export class Settings {
     // stays open across the re-render after each save
     parts.push(el('details', { open: !!this.profileOpen, ontoggle: (e) => { this.profileOpen = e.currentTarget.open; } },
       el('summary', `What "${s.activeName}" changes`), el('div.rows', values)));
+    if (vs.kind === 'ok') parts.push(this.versionsBlock(s.activeName, vs, lock));
     return el('div.section', parts);
+  }
+
+  // The kept versions of the active profile (the comma keeps the last few on every install): put one back, or keep
+  // the current one. Refused by the comma while the car moves, like every profile change.
+  versionsBlock(name, vs, lock) {
+    const send = async (method, body, done) => {
+      try {
+        await api('/api/profiles/versions', { method, body: { kind: 'profile', name, ...body } });
+        this.app.toast(done);
+      } catch (e) { this.app.toast(e.message); }
+      this.renderDrivingSoon();
+    };
+    const rows = vs.versions.map(v => {
+      const changes = v.live ? 'In use now'
+        : v.diff.length ? `${v.diff.length} change${v.diff.length === 1 ? '' : 's'}: ` +
+          v.diff.slice(0, 3).map(d => `${d.label} ${d.from} → ${d.to}`).join(', ') + (v.diff.length > 3 ? ', …' : '')
+          : 'Same values as the one in use';
+      const btn = v.live ? el('div.pv', el('b', 'In use'))
+        : lock(el('button', { onclick: () => send('PUT', { id: v.id }, `Using the ${v.when} version`) }, 'Use'));
+      return el('div.row' + (v.live ? '.changed' : ''),
+        el('div.lbl', el('b', [v.when, v.label].filter(Boolean).join(' · ')), el('small', changes)), btn);
+    });
+    if (!vs.liveKept) {
+      rows.unshift(el('div.row', el('div.lbl', el('b', 'Current file isn\'t kept yet'),
+        el('small', 'Keep it so you can come back to it after switching.')),
+        lock(el('button', { onclick: () => send('POST', { label: 'kept from the HUD' }, 'Kept') }, 'Keep'))));
+    }
+    if (!rows.length) rows.push(el('div.row', el('div.lbl', el('small', 'No versions kept yet: the next install keeps one.'))));
+    return el('details', { open: !!this.versionsOpen, ontoggle: (e) => { this.versionsOpen = e.currentTarget.open; } },
+      el('summary', `Versions of "${name}" (last ${vs.keep} kept)`), el('div.rows', rows));
   }
 
   // the lane confidence right now, under the threshold slider (Display)

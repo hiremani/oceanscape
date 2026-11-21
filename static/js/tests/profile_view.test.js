@@ -104,3 +104,41 @@ test('provenance line', () => {
   assert.equal(provenance({}), '');
   assert.equal(provenance(null), '');
 });
+
+// ---- kept versions ----
+import { versionsState, versionDiff, fieldLabel } from '../profile_view.js';
+
+const VERS = { kind: 'profile', name: 'me', keep: 10, editable: true, versions: [
+  { id: '20261121-070000-aaaaaaaa', created: 1795244400, label: 'nightly', source: 'install', live: true,
+    values: { ...DEFAULTS, follow_gap_s: 1.8, stop_gap_m: 4 } },
+  { id: '20261120-070000-bbbbbbbb', created: 1795158000, label: 'before nightly', source: 'auto', live: false,
+    values: { ...DEFAULTS, follow_gap_s: 1.6, stop_gap_m: 4, stop_decel: 0.8 } },
+] };
+
+test('versions: unsupported on an older comma server', () => {
+  assert.equal(versionsState(new Error('404')).kind, 'unsupported');
+  assert.equal(versionsState({}).kind, 'unsupported');
+});
+
+test('versions: the live one and what each other one changes against it', () => {
+  const s = versionsState(VERS);
+  assert.equal(s.kind, 'ok');
+  assert.deepEqual(s.versions.map(v => v.live), [true, false]);
+  assert.deepEqual(s.versions[0].diff, []);
+  assert.deepEqual(s.versions[1].diff.map(d => d.key), ['stop_decel', 'follow_gap_s']);   // biggest change first
+  assert.equal(s.versions[1].diff[1].from, '1.80 s');
+  assert.equal(s.versions[1].diff[1].to, '1.60 s');
+});
+
+test('versions: no live kept version compares with the active profile', () => {
+  const s = versionsState({ ...VERS, versions: [{ ...VERS.versions[1] }] }, { ...DEFAULTS, follow_gap_s: 1.6 });
+  assert.equal(s.liveKept, false);
+  assert.deepEqual(s.versions[0].diff.map(d => d.key), ['stop_decel']);   // stop_gap_m: not in the active values
+});
+
+test('fields the section does not list still get a readable label', () => {
+  assert.deepEqual(fieldLabel('follow_gap_s'), ['Following gap', 's']);
+  assert.deepEqual(fieldLabel('turn_in_deg_s'), ['Turn in', '°/s']);
+  assert.deepEqual(fieldLabel('stop_gap_m'), ['Stop gap', 'm']);
+  assert.deepEqual(versionDiff({ a: 'x', b: 1 }, { a: 'y', b: 1 }), []);
+});
