@@ -32,3 +32,13 @@ test('style: a ghost keeps GHOST_ALPHA of its confidence alpha and goes grey', (
   assert.equal(g.desat, 1);
   assert.deepEqual(provenanceStyle(1, 7), { alpha: 1, desat: 0 });   // clamped
 });
+
+test('on the concept ground styles a remembered car sinks to GHOST_HEIGHT, a measured one keeps its height', async () => {
+  const { ghostHeight, GHOST_HEIGHT } = await import('../provenance.js');
+  assert.equal(ghostHeight(1), 1);
+  assert.equal(ghostHeight(0), GHOST_HEIGHT);
+  assert.ok(ghostHeight(0.5) > GHOST_HEIGHT && ghostHeight(0.5) < 1);
+  assert.equal(ghostHeight(undefined), 1);   // objects with no provenance (the car's own list) keep their height
+  assert.equal(ghostHeight(NaN), 1);
+  assert.ok(GHOST_HEIGHT <= 0.4);            // low enough to read as gone, not just smaller
+});

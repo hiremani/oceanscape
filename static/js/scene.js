@@ -26,6 +26,7 @@ import { STEER_RATIO } from './vehicle.js';
 // Reality View phase 1: planner intent on the road, provenance styling, sun lighting
 import { speedSourceLabel, stopPoint, laneChangeIntent, chevrons, barAcross } from './intent.js';
 import { staleness, solidity, provenanceStyle } from './provenance.js';
+import { finiteOr0, restorePose, vecFinite } from './poseguard.js';
 import { sunPosition, sunLighting, sunDirection } from './sun.js';
 
 const EGO_LEN = 4.775;
@@ -1280,6 +1281,7 @@ export class CarScene {
       const prov = this.settings.showProvenance !== false && e.data
         ? provenanceStyle(e.alpha, solidity(staleness(e.data, (now - e.lastSeen) * (rate || 1))))
         : { alpha: e.alpha, desat: 0 };
+      e.solid = 1 - prov.desat;   // for the concept ground styles, where a ghost sinks instead (groundstyle/surface.js)
       const desat = Math.round(prov.desat * 10) / 10;   // recolor in tenths, not every frame
       if (e.color !== color || e.desat !== desat) {
         const c = (this._provColor || (this._provColor = new THREE.Color())).set(color);
@@ -1336,14 +1338,18 @@ export class CarScene {
   // (state.pose, world/pose.js) and this integration only fills in between its snapshots (_followPose).
   _ground(dt) {
     const vs = this.vehicle;
-    const v = vs ? vs.v : 0;
+    const v = vs ? finiteOr0(vs.v) : 0;   // (poseguard.js: one NaN here would black the screen for good)
     const p = this.pose;
+    dt = finiteOr0(dt);
     // heading from the yaw-rate gyro when there is one (it's what the radar and the world model use),
     // else from the steering angle through the bicycle model
-    p.h += (vs && vs.hasYaw ? vs.w : v * (vs ? vs.curvature : 0)) * dt;
+    p.h += finiteOr0(vs && vs.hasYaw ? vs.w : v * (vs ? vs.curvature : 0)) * dt;
     p.x += v * Math.cos(p.h) * dt;
     p.y += v * Math.sin(p.h) * dt;
-    if (!this._followPose(dt)) {
+    if (restorePose(p, this._goodPose || (this._goodPose = {}))) this.poseSeq = null;   // re-take the worker's pose
+    const followed = this._followPose(dt);
+    if (restorePose(p, this._goodPose)) this.poseSeq = null;
+    if (!followed) {
       // no GPS-anchored pose: keep the numbers small; the texture repeats every TILE so whole-tile jumps are invisible
       const wrap = TILE * 1000;
       if (Math.abs(p.x) > wrap) p.x -= Math.sign(p.x) * wrap;
@@ -1369,6 +1375,7 @@ export class CarScene {
   _followPose(dt) {
     const wp = this.state && this.state.pose;
     if (!wp || !wp.origin) { this.poseSeq = null; return false; }
+    if (![wp.x, wp.y, wp.h, wp.v, wp.w].every(Number.isFinite)) return false;   // a broken snapshot: carry on locally
     const vs = this.vehicle;
     const age = Math.min(0.5, Math.max(0, (performance.now() - (this.stateAt || 0)) / 1000) * (vs ? vs.rate : 1));
     const hm = wp.h + 0.5 * wp.w * age;
@@ -1612,6 +1619,15 @@ export class CarScene {
     this._reverseFlip();   // Reality View phase 1
     this._sunLight();      // Reality View phase 1
     this._camera(dt);
+    if (!vecFinite(this.camera.position) || !vecFinite(this.controls.target)) {   // poseguard.js: never stay black
+      const h = this.pose.h;
+      this.camYaw = { h, v: 0, carH: h };
+      this.camLag = 0;
+      this.chaseDolly = 1;
+      this.viewAnim = null;
+      if (this.studio) this._animate(this.studio.target, new THREE.Spherical(12, 1.0, 0), this.viewOffset, true);
+      else this.setView(this.view || 'chase', true);
+    }
     this._road(dt);
     // furniture and the nav arrow anchor to whichever road is drawn
     this.furniture.update(this.state, this.mapFrame || this.road, this.vehicle, this.settings, dt, this.clock, toScene, { hideLight: !!this.ourSignal });

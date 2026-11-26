@@ -27,6 +27,17 @@ export function provenanceKind(stale) {
   return s >= 1 ? 'live' : s <= 0 ? 'remembered' : 'fading';
 }
 
+// On the concept ground styles (groundstyle/surface.js) the cars are raised out of one sheet, so opacity can't show a
+// ghost there: a remembered car sinks instead, to this share of its height, its tail lights dimmed with it.
+export const GHOST_HEIGHT = 0.3;
+
+/** The share of its height (and tail-light strength) a car keeps on the concept ground styles: 1 measured now, down
+ *  to GHOST_HEIGHT remembered only. */
+export function ghostHeight(solid) {
+  const k = Number.isFinite(solid) ? Math.min(1, Math.max(0, solid)) : 1;
+  return GHOST_HEIGHT + (1 - GHOST_HEIGHT) * k;
+}
+
 /** How to draw it: opacity (its confidence alpha scaled toward a ghost's) and how far toward grey its color goes. */
 export function provenanceStyle(alpha, solid) {
   const k = Math.min(1, Math.max(0, solid));

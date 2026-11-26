@@ -21,6 +21,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { FIELD_GLSL } from '../ground.js';
 import { MAX_VEH, DEF, LINE_H, BASE_LIGHT, SURFACE_GLSL, STYLE_GLSL } from './glsl.js';
 import { buildEgoMap } from './egomap.js';
+import { ghostHeight } from '../provenance.js';
 
 export const DEFAULT_PROFILE = {
   drape: 0.8,        // how softly a car meets the sheet: its top edge rounds over half this, its foot flares out 0.4 of it
@@ -388,8 +389,9 @@ export class GroundSurface {
       e.pivot.updateWorldMatrix(true, false);
       const m = e.pivot.matrixWorld.elements, ud = e.group.userData, s = e.pivot.scale.x;
       const X = m[12], Z = m[14];
+      const k = ghostHeight(e.solid);   // a remembered car sinks into the sheet (provenance.js), lamps dimmed with it
       list.push({ X, Z, d: Math.hypot(X, Z - 2.4), th: Math.atan2(m[8], m[10]),
-        w: ud.width * e.group.scale.x * s / 2, l: ud.length * e.group.scale.z * s / 2, h: ud.height * e.group.scale.y * s, a: e.alpha, c: e.color, painted: !!(e.lead || e.threat) });
+        w: ud.width * e.group.scale.x * s / 2, l: ud.length * e.group.scale.z * s / 2, h: ud.height * e.group.scale.y * s, a: e.alpha * k, c: e.color, painted: !!(e.lead || e.threat) });
       e.pivot.visible = false;
       // the car we follow: the nearest flagged ahead
       if (e.lead && -Z > 0 && (!lead || Z > lead.Z)) {
