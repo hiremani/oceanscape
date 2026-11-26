@@ -126,6 +126,11 @@ const CAM_CAND_S = 0.4;            // s: a candidate not seen again this soon is
 // a box's range is coarse: on an object the radar measures, it moves the estimate across the line of sight only
 // (its range noise is taken CAM_RANGE_DEFER times larger)
 const CAM_RANGE_DEFER = 10.0;
+// ...but a box still has to be about as far away as the object it joins: its range estimate within this share (or
+// CAM_ASSOC_MIN_M, whichever is larger) of the object's, so a near box on the same bearing never attaches to a far
+// lead it can't see (on a recorded night drive, 40 m boxes joined 68-70 m leads)
+const CAM_ASSOC_REL = 0.25;
+const CAM_ASSOC_MIN_M = 6.0;
 const CAM_RADAR_FRESH_S = 0.5;     // ...while the radar has reported the object this recently
 const CAM_ALONE_S = 1.0;           // it starts vehicles only after running this long with no radar or ADAS at all
 const CAM_VETO_S = 0.6;            // looking and not finding it this long (about 9 frames at 15 fps): an overhead structure
@@ -465,6 +470,12 @@ function sameSourceId(a, b) {
 }
 
 
+/** Whether a detector box's range (m) is close enough to an object's to join it (CAM_ASSOC_REL / CAM_ASSOC_MIN_M). */
+export function camRangeFits(boxRange, objRange) {
+  if (!Number.isFinite(boxRange) || !Number.isFinite(objRange)) return false;
+  return Math.abs(boxRange - objRange) <= Math.max(CAM_ASSOC_MIN_M, CAM_ASSOC_REL * boxRange);
+}
+
 export class WorldModel {
   constructor(calib = MEASURED_CALIBRATION) {
     this.odo = new EgoOdometry();
@@ -569,7 +580,11 @@ export class WorldModel {
     const assigned = new Map();   // meas index -> track id
     const used = new Set();
     // gated on the center the face puts each track at, so a long truck's rear and its center aren't 5 m apart
-    const near = (tr, m, z) => { const c = tr.centerFor(z, o); return hypot(c[0] - tr.pos[0], c[1] - tr.pos[1]) < GATE_M + 2.5 * Math.max(m.sx, m.sy); };
+    const near = (tr, m, z) => {
+      const c = tr.centerFor(z, o);
+      if (!(hypot(c[0] - tr.pos[0], c[1] - tr.pos[1]) < GATE_M + 2.5 * Math.max(m.sx, m.sy))) return false;
+      return m.src !== 'cam' || camRangeFits(hypot(z[0] - o[0], z[1] - o[1]), hypot(tr.pos[0] - o[0], tr.pos[1] - o[1]));
+    };
 
     // a source's own track id keeps feeding the same object while it's plausible
     meas.forEach(([m, z, Rg], k) => {

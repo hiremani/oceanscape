@@ -1,7 +1,7 @@
 // node --test static/js/tests/*.test.js -- the NPU detector as the world model's fourth source (world_model.js 'cam')
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FUSION_DELAY_S, WorldModel, adasMeasurement, cameraMeasurements, radarMeasurements } from '../world/world_model.js';
+import { FUSION_DELAY_S, WorldModel, adasMeasurement, camRangeFits, cameraMeasurements, radarMeasurements } from '../world/world_model.js';
 
 function radarObj(oid, x, y, { vx = 0.0, vy = 0.0, age = 40, cls = 'unclassified', w = null, l = null } = {}) {
   return { id: oid, x, y, vx, vy, age, hist: 0x3FFF, state: 3, quality: 13, cls, heading: null, w, l };
@@ -139,4 +139,21 @@ test('a box does not override the radar\'s range on an object the radar measures
   const o = out.find(x => x.sources.some(s => s.src === 'radar'));
   assert.ok(o && Math.abs(o.x - 30.0) < 0.8, `range ${o && o.x}`);
   assert.equal(o.cls, 'car');
+});
+
+test('a near box on the same bearing never joins a far lead (night drive: 40 m boxes joined 68-70 m leads)', () => {
+  assert.equal(camRangeFits(40, 69), false);
+  assert.equal(camRangeFits(40, 45), true);    // within 25 %
+  assert.equal(camRangeFits(10, 15.5), true);  // within the 6 m floor
+  assert.equal(camRangeFits(10, 17), false);
+  assert.equal(camRangeFits(NaN, 20), false);
+  const m = new WorldModel();
+  const out = run(m, 40, 0, (t) => {
+    m.add(radarMeasurements(t, [radarObj(5, 69.0, 0.3)], 0.0));
+    if (t > 0.5) m.add(cameraMeasurements(t, [camDet('truck', 40.0, 0.2, { sx: 15.0 })]));
+  });
+  const far = out.find(x => Math.abs(x.x - 69) < 4);
+  assert.ok(far, JSON.stringify(out));
+  assert.ok(!far.sources.some(s => s.src === 'cam'), 'the far lead took no camera update');
+  assert.notEqual(far.cls, 'truck');
 });
