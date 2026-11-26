@@ -47,6 +47,17 @@ android {
         targetSdk = 36
         versionCode = 26
         versionName = "1.7.0"
+        // arm64 only: the car's RK3588S, and the only ABI the CAN helper and Rockchip's NPU runtime come in
+        ndk { abiFilters += "arm64-v8a" }
+    }
+
+    // the NPU detector's native half (src/main/cpp: preprocess, YOLOX decode, the RKNN runtime by dlopen)
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
@@ -67,7 +78,7 @@ android {
 
     androidResources {
         // stored as they are, so LocalServer can stream them from a file descriptor (the model is ~25 MB)
-        noCompress += listOf("glb", "js", "css", "html", "dbc", "json", "svg", "ico")
+        noCompress += listOf("glb", "js", "css", "html", "dbc", "json", "svg", "ico", "rknn")
     }
 
     compileOptions {

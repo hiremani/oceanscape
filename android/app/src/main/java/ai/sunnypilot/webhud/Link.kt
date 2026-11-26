@@ -54,6 +54,11 @@ class Link private constructor(context: Context) {
         },
         onDeviceUnreachable = { checkNow() })
 
+    init {
+        // the NPU detector (Reality View phase 3): reads the comma's road camera itself and serves /npu on the server
+        server.npu = NpuHub(NpuPipeline(context.assets, context.applicationInfo.nativeLibraryDir) { server.device })
+    }
+
     // UI thread only
     private var listener: Listener? = null
 

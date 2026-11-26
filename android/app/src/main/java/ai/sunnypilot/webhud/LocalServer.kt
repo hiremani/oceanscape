@@ -52,8 +52,14 @@ class LocalServer(
     @Volatile var paused = false
         set(value) {
             field = value
-            if (value) closeAll()
+            if (value) {
+                closeAll()
+                npu?.closeAll()   // the detector stops with its last subscriber
+            }
         }
+
+    /** The NPU detector's `/npu` WebSocket and `/npu/status` (NpuHub), served here, not relayed; null: not in this app. */
+    @Volatile var npu: NpuHub? = null
 
     /** When the device last sent anything, on the [nowMs] clock. */
     @Volatile var lastDeviceData = 0L
@@ -66,6 +72,7 @@ class LocalServer(
     fun stop() {
         runCatching { server.close() }
         closeAll()
+        npu?.closeAll()
     }
 
     /** Points the relay at [address]; open connections to a previous device are dropped. */
@@ -121,6 +128,15 @@ class LocalServer(
             // a plain API call is one request on its own connection: kept alive, the WebView would send its next
             // request down the same pipe, and an /app/ or /map/ call meant for this server would reach the comma
             relay(client, if (path.startsWith("/api/")) closeAfter(head) else head)
+        } else if (path == "/npu") {
+            // the NPU detector's results (NpuHub): this connection becomes the page's WebSocket until it goes away
+            val hub = npu
+            if (hub == null) {
+                runCatching { respond(client.getOutputStream(), 404, "Not Found", "text/plain", "no NPU detector".toByteArray(), emptyMap(), false) }
+                client.closeQuietly()
+            } else {
+                hub.serve(client, text)
+            }
         } else {
             try {
                 client.soTimeout = 0
@@ -132,6 +148,7 @@ class LocalServer(
                     path.startsWith("/map/os/") || path.startsWith("/map/ossurf/") -> serveOs(client, method, path, text)
                     path == "/map/prefetch" || path == "/map/status" -> servePrefetch(client, method, path, text)
                     path.startsWith("/app/") -> serveApp(client, method, path, target.substringAfter('?', ""), text)
+                    path == "/npu/status" -> serveNpuStatus(client, method)
                     else -> serveAsset(client, method, path, text)
                 }
             } catch (e: IOException) {
@@ -433,6 +450,13 @@ class LocalServer(
         }
         val (status, json) = api(method, path, params, body, header(head, "X-App-Token"))
         respond(out, status, if (status == 200) "OK" else "Error", "application/json; charset=utf-8", json.toByteArray(), mapOf("Cache-Control" to "no-store"), method == "HEAD")
+    }
+
+    /** GET /npu/status: the NPU detector's status object (protocol v1, NpuProtocol.status). */
+    private fun serveNpuStatus(client: Socket, method: String) {
+        val out = client.getOutputStream()
+        val body = (npu?.status() ?: NpuProtocol.status(false, "no NPU detector in this app", "", "", false, 0.0, null)).toString()
+        respond(out, 200, "OK", "application/json; charset=utf-8", body.toByteArray(), mapOf("Cache-Control" to "no-store"), method == "HEAD")
     }
 
     private fun exists(rel: String): Boolean = try {

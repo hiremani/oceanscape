@@ -189,6 +189,46 @@ gets from `window.WebHudApp.appToken()` (the server is on loopback, which other 
 
 `adb logcat -s WebHud` logs each job's title (`comma job N: ...`).
 
+## The NPU detector
+
+The app can run an object detector on the RK3588's NPU (Reality View phase 3): YOLOX-s, int8, on the comma's
+road camera. `NpuPipeline` opens its own WebSocket to the comma's `/video` (the page's camera window is not
+involved), decodes the H.264 with the hardware decoder (`MediaCodec`), letterboxes the newest frame to 640x640
+RGB in C++ (`src/main/cpp/npu_post.cpp`) and runs it through Rockchip's runtime (`npu_jni.cpp`). Only one inference
+is ever in flight: frames that arrive while the NPU is busy are decoded and dropped, so the NPU always gets the
+newest one. Boxes go to the page on the app's own `/npu` WebSocket (`NpuHub`); `GET /npu/status` says whether the
+NPU is usable, and why not. The detector runs only while a page has sent `{"cmd":"start"}`, and stops with the
+last subscriber or when the app is paused. The protocol (v1) is documented in `NpuProtocol.kt`; the page's
+client is `static/js/npu.js`. `{"cmd":"start","dry":true}` decodes and preprocesses without the NPU, which is how
+a device without one (the emulator) checks the rest of the pipeline.
+
+Rockchip's runtime is loaded with `dlopen`, never linked: the system's own copy first (`/vendor/lib64` or
+`/system/lib64`, matching the kernel's NPU driver), then the one bundled in the APK. If neither loads, or
+`rknn_init` fails (no access to `/dev/rknpu`), `/npu/status` says so and the app carries on without it.
+
+Three files are not in the repository and must be put in place before building, or the build leaves the NPU out
+(it still builds, and `/npu/status` reports which part is missing):
+
+- `tools/npu/fetch_rknn.sh`: downloads Rockchip's runtime (`librknnrt.so`, bundled into the APK) and its header
+  (`rknn_api.h`, which compiles the NPU code in) from github.com/airockchip/rknn-toolkit2 and checks their
+  SHA-256s. Running it means accepting Rockchip's RKNN SDK licence, which doesn't clearly allow redistributing
+  the files, so they are gitignored. Don't publish an APK built with them without checking that licence.
+- `tools/npu/convert_model.sh ROUTE_DIR...`: builds `src/main/assets/npu/yolox_s-640-i8.rknn` from Rockchip's
+  model-zoo YOLOX-s (Apache-2.0) with rknn-toolkit2 in Docker (`linux/amd64`, the x86_64 toolkit: the arm64 one
+  segfaults looking for a real NPU). It quantises on about 30 frames per drive taken from each segment's
+  `qcamera.ts`, scaled to 640 wide and letterboxed with the same grey (`0x727272`, 114) the app pads with. Use
+  drives with day and night, town and open road. The simulator's detections on a few frames print at the end.
+
+The model's three heads (strides 8, 16, 32; box offsets and log sizes, objectness and class scores already
+through a sigmoid) are decoded against the output attributes the runtime reports, so a model exported NHWC or
+float still decodes. Detections of the 8 classes the HUD uses (person, bicycle, car, motorcycle, bus, truck,
+traffic light, stop sign) scoring 0.35 or more are sent, after per-class NMS (IoU 0.45), at most 32; a box
+whose best class is anything else is dropped rather than relabelled. Scores are sent so the page can apply its
+own threshold.
+
+The image maths has host tests on the Mac:
+`cmake -S tools/npu/test -B build/npu-test && cmake --build build/npu-test && ./build/npu-test/npu_post_test`.
+
 ## Build and install
 
 Needs JDK 17+ and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in `local.properties`).

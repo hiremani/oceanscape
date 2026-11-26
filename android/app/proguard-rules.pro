@@ -9,3 +9,5 @@
 -dontwarn com.jcraft.jzlib.**
 -dontwarn javax.security.auth.**
 -dontwarn org.ietf.jgss.**
+# the NPU detector's JNI methods (npu_jni.cpp) are found by class and method name
+-keep class ai.sunnypilot.webhud.NpuNative { native <methods>; }
