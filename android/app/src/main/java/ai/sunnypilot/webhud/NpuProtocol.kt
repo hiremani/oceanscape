@@ -90,6 +90,16 @@ object NpuProtocol {
         null
     }
 
+    /** The comma /video stream's own text messages the page needs to place boxes (npu.js): the camera calibration and
+     *  the model's road. The pipeline passes these on to /npu as they come, so the page needn't open /video itself. */
+    val PASS_THROUGH = setOf("calib", "model")
+
+    fun isPassThrough(text: String): Boolean = try {
+        JSONObject(text).optString("type") in PASS_THROUGH
+    } catch (e: Exception) {
+        false
+    }
+
     class Detection(val coco: Int, val score: Float, val x1: Float, val y1: Float, val x2: Float, val y2: Float)
 
     /** The protocol's class name for a COCO index (the eight the detector keeps), or null for any other. */

@@ -151,4 +151,13 @@ class NpuProtocolTest {
     @Test(expected = EOFException::class) fun endOfStream() {
         WsCodec.Reader(ByteArrayInputStream(byteArrayOf(0x81.toByte())), 100).next()
     }
+
+    @Test
+    fun passesOnOnlyCalibAndModelMessages() {
+        assertTrue(NpuProtocol.isPassThrough("""{"type":"calib","rpy":[0,0.02,0]}"""))
+        assertTrue(NpuProtocol.isPassThrough("""{"type":"model","frameId":7}"""))
+        assertFalse(NpuProtocol.isPassThrough("""{"type":"camera","camera":"road"}"""))
+        assertFalse(NpuProtocol.isPassThrough("""{"cmd":"start"}"""))
+        assertFalse(NpuProtocol.isPassThrough("not json"))
+    }
 }

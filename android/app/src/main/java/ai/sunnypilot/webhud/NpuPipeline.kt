@@ -197,6 +197,8 @@ class NpuPipeline(
                 val msg = reader.next()
                 when (msg.opcode) {
                     WsCodec.BINARY -> onFrame(msg.payload)
+                    // calibration and model messages go on to the page as they are (NpuProtocol.PASS_THROUGH)
+                    WsCodec.TEXT -> msg.text.let { if (NpuProtocol.isPassThrough(it)) sink(it) }
                     WsCodec.PING -> WsCodec.write(out, WsCodec.PONG, msg.payload, mask = true)
                     WsCodec.CLOSE -> return
                 }
