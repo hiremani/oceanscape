@@ -45,8 +45,8 @@ android {
         applicationId = "ai.sunnypilot.oceanscape.mallik"
         minSdk = 26
         targetSdk = 36
-        versionCode = 27
-        versionName = "1.8.0"
+        versionCode = 28
+        versionName = "1.9.0"
         // arm64 only: the car's RK3588S, and the only ABI the CAN helper and Rockchip's NPU runtime come in
         ndk { abiFilters += "arm64-v8a" }
     }
