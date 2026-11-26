@@ -45,8 +45,8 @@ android {
         applicationId = "ai.sunnypilot.oceanscape.mallik"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "1.6.5"
+        versionCode = 26
+        versionName = "1.7.0"
     }
 
     buildTypes {
