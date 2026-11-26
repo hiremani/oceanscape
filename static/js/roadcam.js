@@ -376,6 +376,8 @@ export class RoadCam {
       if (this.shown) this.shown.frame.close();
       this.shown = next;
       this.stats.shown++;
+      // camera on road (videoground.js) copies it while the window is open, instead of a stream of its own
+      if (this.onShown) this.onShown(next, this.calib, this.models[this.models.length - 1]);
       this.dirty = true;
       if (this.status.textContent) this.say('');
     } else if (this.ws && now - this.lastFrameAt > STALL_MS) {

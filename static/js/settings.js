@@ -545,6 +545,29 @@ export class Settings {
       ['showPath', 'Planned path', 'Blue band along openpilot\'s path while it steers or controls the speed.'],
       ['showIntent', 'Planner intent', 'What openpilot is about to do: chevrons on its path toward a lane change, a red bar where its plan stops, and in the status line what is slowing the car (a stop sign, a turn, your speed, a wet road...).'],
     ]));
+    // ---- camera on road (videoground.js) ----
+    const camOn = s.camOnRoad === true;
+    const camRows = [
+      el('div.row', el('div.lbl', el('b', 'Camera on road'),
+        el('small', 'The comma\'s live camera pixels on the ground: the real road, its paint and patches, under the drawn lanes and cars. ' +
+          'Uses the camera stream and the screen\'s graphics; off by default until it has been measured on this screen.')),
+        this.app.switch(camOn, v => { set('camOnRoad', v); this.show('display', true); })),
+    ];
+    if (camOn) {
+      const vg = this.app.videoGround && this.app.videoGround.stats;
+      camRows.push(
+        el('div.row', el('div.lbl', el('b', 'Blend'), el('small', 'How strongly the camera shows over the drawn ground.')),
+          this.app.segmented([['0.5', 'Light'], ['0.85', 'Strong'], ['1', 'Full']], String(s.camOnRoadStrength ?? 0.85), v => set('camOnRoadStrength', Number(v)))),
+        el('div.row', el('div.lbl', el('b', 'Camera'), el('small', 'Both: the wide camera near the car, the road camera farther out (two streams from the comma).')),
+          this.app.segmented([['road', 'Road'], ['wide', 'Wide'], ['both', 'Both']], s.camOnRoadSource || 'road', v => set('camOnRoadSource', v))),
+        el('div.row', el('div.lbl', el('b', 'Road memory'), el('small', 'Keep what the camera saw on the road under and behind the car for a few seconds.')),
+          this.app.switch(s.camOnRoadMemory !== false, v => set('camOnRoadMemory', v))),
+        el('div.row', el('div.lbl', el('b', 'Now'), el('small.cur', vg && vg.framesUsed
+          ? `${vg.cameras}: ${vg.fps} frames/s, ${vg.ageMs} ms old, copy ${vg.uploadMs.toFixed(1)} ms, memory ${vg.memMs.toFixed(1)} ms`
+          : 'No camera frames yet (needs the comma, calibrated).'))),
+      );
+    }
+    body.append(el('div.section', el('h3', 'Camera on road'), el('div.rows', camRows)));
     // the map around the car is downloaded ahead and kept (maptiles.py MapPrefetch)
     this.mapStatus = el('small.cur', '');
     body.append(el('div.section', el('h3', 'Map download'),

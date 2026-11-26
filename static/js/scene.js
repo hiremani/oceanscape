@@ -1626,6 +1626,8 @@ export class CarScene {
     const k = this.drumOn && !this.studio && !this.cutaway.awake ? 1 / DRUM_R : 0;
     this.drumK += (k - this.drumK) * (1 - Math.exp(-dt * 3));
     DRUM.value.x = this.drumK < 1e-4 / DRUM_R ? 0 : this.drumK;
+    // camera on road (videoground.js): its road memory pass renders before the view does
+    if (this.videoGround) this.videoGround.update(dt);
     this.renderer.render(this.scene, this.camera);
     this._labels();   // after render: the camera's matrices are this frame's
   }
