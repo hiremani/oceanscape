@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  quadFit,
   HEIGHT_INIT, carToCalib, projectCalib, projectGround, matRows, groundFit, poseAt, captureTransform, applyTransform,
   arrivalAge, memoryCenter, memoryPoint, memoryUV, objectShadow, shadowed, liveWeight, BASE_LATENCY_S, NEAR_M, FAR_M,
 } from '../videoground_geom.js';
@@ -50,16 +51,18 @@ test('matRows is row-major (three.js Matrix3.set order)', () => {
   assert.deepEqual(matRows([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 });
 
+const hs = (f) => ({ h: f.h, slope: f.slope });   // the straight fit's part
+
 test('ground fit: height and slope from confident lane lines; the calibrated height otherwise', () => {
   const line = (y, a, b) => Array.from({ length: 33 }, (_, i) => { const x = i * 2; return [x, y, a - b * x]; });
   const fit = groundFit({ pathZ: 1.3, lanes: [line(1.8, 1.45, 0.01), line(-1.8, 1.45, 0.01)], laneProbs: [0.9, 0.9] });
   near(fit.h, 1.45, 1e-6);
   near(fit.slope, 0.01, 1e-6);
-  assert.deepEqual(groundFit({ pathZ: 1.3, lanes: [line(1.8, 1.45, 0.01)], laneProbs: [0.1] }), { h: 1.3, slope: 0 });
-  assert.deepEqual(groundFit(null), { h: HEIGHT_INIT, slope: 0 });
-  assert.deepEqual(groundFit({ pathZ: 9 }), { h: HEIGHT_INIT, slope: 0 });   // nonsense height: the default
+  assert.deepEqual(hs(groundFit({ pathZ: 1.3, lanes: [line(1.8, 1.45, 0.01)], laneProbs: [0.1] })), { h: 1.3, slope: 0 });
+  assert.deepEqual(hs(groundFit(null)), { h: HEIGHT_INIT, slope: 0 });
+  assert.deepEqual(hs(groundFit({ pathZ: 9 })), { h: HEIGHT_INIT, slope: 0 });   // nonsense height: the default
   // a nonsense fit (a 40 % slope) is refused
-  assert.deepEqual(groundFit({ pathZ: 1.3, lanes: [line(1.8, 1.45, 0.4)], laneProbs: [0.9] }), { h: 1.3, slope: 0 });
+  assert.deepEqual(hs(groundFit({ pathZ: 1.3, lanes: [line(1.8, 1.45, 0.4)], laneProbs: [0.9] })), { h: 1.3, slope: 0 });
 });
 
 test('pose history interpolation, across the heading wrap', () => {
@@ -133,4 +136,21 @@ test('live weight: ramps in after the near limit, out before the far one, off th
   assert.ok(at(FAR_M * 0.9 + CAM.x, 0) < 1);
   assert.equal(at(FAR_M + CAM.x + 1, 0), 0);
   assert.equal(liveWeight(20, 0, null, CAM), 0);
+});
+
+test('curved road fit: a hill\'s changing rise is recovered; short, noisy or implausible fits are refused', () => {
+  // a road 1.4 m under the camera rising 1 % per m plus 0.05 % per m more each metre (z down: a - b x - c x^2)
+  const line = (y) => Array.from({ length: 33 }, (_, i) => { const x = i * 1.25; return [x, y, 1.4 - 0.01 * x - 0.0005 * x * x]; });
+  const fit = groundFit({ pathZ: 1.3, lanes: [line(1.8), line(-1.8)], laneProbs: [0.9, 0.9] });
+  near(fit.quad.h, 1.4, 1e-6);
+  near(fit.quad.slope, 0.01, 1e-6);
+  near(fit.quad.curv, 0.0005, 1e-7);
+  // carToCalib follows it: the road 30 m ahead of the camera
+  near(carToCalib(30 + CAM.x, 0, 0, { ...CAM, ...fit.quad })[2], 1.4 - 0.01 * 30 - 0.0005 * 900, 1e-6);
+  // too short a stretch, or a curvature no road has: the straight fit's line instead
+  assert.equal(quadFit([[6, 0, 1.3], [7, 0, 1.3], [8, 0, 1.3], [9, 0, 1.3], [10, 0, 1.3], [11, 0, 1.3], [12, 0, 1.3], [13, 0, 1.3]]), null);
+  const wild = Array.from({ length: 20 }, (_, i) => { const x = 6 + i * 1.7; return [x, 0, 1.4 - 0.01 * x * x]; });
+  assert.equal(quadFit(wild), null);
+  const flat = groundFit({ pathZ: 1.3, lanes: [], laneProbs: [] });
+  assert.deepEqual(flat.quad, { h: 1.3, slope: 0, curv: 0 });
 });
