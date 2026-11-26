@@ -13,6 +13,7 @@ import { CarCommands } from './cancmd.js';
 import { Settings } from './settings.js';
 import { VehicleState } from './vehicle.js';
 import { RoadCam } from './roadcam.js';
+import { VideoGround } from './videoground.js';   // camera on road (Phase 2)
 import { Region } from './region.js';
 import { setCountry, currentCountry } from './regional.js';
 
@@ -31,6 +32,7 @@ const DEFAULTS = {
   showFps: true, renderScale: 'auto', showMusic: true, showNav: true, demoInfotainment: false, demoCarState: false, carDemo: false,
   calibration: true, mapPrefetchKm: 25, mapSource: 'auto', osKey: '', osCap: 5000, positionSource: 'car', roadcam: 'mirror', groundStyle: 'perforated',
   layout: 'auto', drum: false, driverSide: 'auto',
+  camOnRoad: false, camOnRoadStrength: 0.85, camOnRoadSource: 'road', camOnRoadMemory: true,   // videoground.js
 };
 
 function loadSettings() {
@@ -90,6 +92,8 @@ class App {
     this.ui = new Settings(this);
     this.car = new CarControls(this);   // the car controls mockup (tap the car)
     this.roadcam = new RoadCam(this);   // the comma's camera with its overlay, in a window over the 3D view
+    // camera on road: the comma's camera pixels on the 3D view's ground (videoground.js; Display -> Road)
+    this.videoGround = this.scene.videoGround = new VideoGround(this.scene, this);
     this.applyTheme();
     this.scene.setEgoLook(this.settings.egoPaint, this.settings.egoWheels);
     this.setView(this.settings.view, true);
