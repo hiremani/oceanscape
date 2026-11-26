@@ -8,6 +8,7 @@ import { CommaPanel } from './comma.js';
 import { GROUND_STYLES } from './groundstyle/index.js';
 import { currentCountry } from './regional.js';
 import { capsRows } from './measure.js';   // drive measurements (About)
+import { assistGroups, ASSIST_KEYS, describeAreaDownload, BLD_AREA_KM } from './assists_view.js';
 import { profileState, profileRows, limitOffsets, provenance, versionsState } from './profile_view.js';
 
 // tab -> what it needs the comma for
@@ -240,6 +241,7 @@ export class Settings {
       if (this.tab !== 'driving') return;
     }
     body.append(this.profileSection(ps, versionsState(vers, ps.active && ps.active.values)));
+    for (const sec of this.assistSections(p, put)) body.append(sec);   // the comma's assists (assists_view.js)
     if (typeof p.FiskerACCTerrain === 'boolean') {
       const toggles = [['FiskerACCAutoSpeed', 'ACC auto speed', 'Set speed follows the speed limit.'],
         ['FiskerACCTerrain', 'ACC Terrain Mode', 'The factory ACC terrain setting. Its effect on driving behavior is unverified.']];
@@ -309,6 +311,18 @@ export class Settings {
       el('div.row', el('div.lbl', el('b', 'Use metric units'), el('small', 'Device-wide setting; the HUD follows the cluster unit when available.')),
         this.app.switch(!!p.IsMetric, v => put({ IsMetric: v }))),
     )));
+  }
+
+  // ---- the comma's driving assists (assists_view.js) ----
+  /** A section per assist group, with only the switches this comma has; sub-options indented under their assist (each
+   *  works on its own: a log-only mode runs with the assist off too). */
+  assistSections(p, put) {
+    return assistGroups(p).map(g => el('div.section', el('h3', g.title), el('p.desc', g.desc), el('div.rows', g.items.flatMap(it => [
+      el('div.row', el('div.lbl', el('b', it.label), el('small', it.desc)),
+        this.app.switch(it.on, v => { if (ASSIST_KEYS.has(it.key)) put({ [it.key]: v }); })),
+      ...it.subs.map(sb => el('div.row.sub', el('div.lbl', el('b', sb.label), el('small', sb.desc)),
+        this.app.switch(sb.on, v => { if (ASSIST_KEYS.has(sb.key)) put({ [sb.key]: v }); }))),
+    ]))));
   }
 
   renderDrivingSoon() { setTimeout(() => { if (this.tab === 'driving') this.show('driving', true); }, 150); }
@@ -575,7 +589,7 @@ export class Settings {
       el('p.desc', 'The map within this distance of the car -- the road tiles and what stands along the roads -- is downloaded in the ' +
         'background and kept for good, so the next drive through the area needs no network. Off downloads only what is in view.'),
       this.app.segmented([['0', 'Off'], ['10', '10 km'], ['25', '25 km'], ['50', '50 km'], ['100', '100 km']], String(s.mapPrefetchKm ?? 25), v => set('mapPrefetchKm', Number(v))),
-      this.mapStatus));
+      this.mapStatus, ...this.buildingsDownload()));
     this.showMapStatus();
     // Ordnance Survey's road widths on top of OSM in Great Britain (osroads.js, OsRoads.kt)
     const src = s.mapSource === 'os' || s.mapSource === 'osm' ? s.mapSource : 'auto';
@@ -630,6 +644,47 @@ export class Settings {
       : `Fix ${f.acc != null ? `\u00b1${Math.round(f.acc)} m` : ''}, ${age.toFixed(1)} s old` + (f.bearing != null ? `, heading ${Math.round(f.bearing)}\u00b0` : '');
   }
 
+  // ---- buildings download (MapPrefetch.kt / the comma's buildings.py) ----
+  /** The buildings part of Map download: how far around the car they're downloaded, and a button for a wider area now. */
+  buildingsDownload() {
+    const s = this.app.settings;
+    if (s.showBuildings === false) return [];
+    this.bldAreaStatus = el('small.cur', '');
+    const area = async () => {
+      const p = this.app.scene && this.app.scene.state && this.app.scene.state.pose;
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) { this.app.toast('No position yet'); return; }
+      try {
+        const r = await fetch('/map/buildings/area', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: p.lat, lon: p.lon, radius_km: BLD_AREA_KM }) });
+        if (!r.ok) throw new Error(r.status === 404 ? 'This server can\'t download buildings' : `${r.status}`);
+        this.app.toast('Downloading buildings');
+        this.showAreaStatus(await r.json());
+      } catch (e) { this.app.toast(e.message); }
+    };
+    this.showAreaStatus();
+    return [
+      el('div.rows', el('div.row', el('div.lbl', el('b', 'Buildings around the car'),
+        el('small', 'Buildings take up to minutes per small area to download, so only a short distance is fetched as you drive.')),
+        this.app.segmented([['0', 'Off'], ['2', '2 km'], ['5', '5 km']], String(s.bldPrefetchKm ?? 2), v => this.app.setSetting('bldPrefetchKm', Number(v)))),
+        el('div.row', el('div.lbl', el('b', 'Download buildings for this area'),
+          el('small', `Everything within ${BLD_AREA_KM} km of the car, kept for good. Best on home Wi-Fi with the car parked.`), this.bldAreaStatus),
+          el('button.btn', { onclick: area }, 'Download'))),
+    ];
+  }
+
+  /** How far the area download got (GET /map/buildings/area), refreshed while it runs and the section is open. */
+  showAreaStatus(st) {
+    const out = this.bldAreaStatus;
+    if (!out) return;
+    const show = (v) => {
+      if (out !== this.bldAreaStatus) return;
+      out.textContent = describeAreaDownload(v);
+      if (v && v.busy) setTimeout(() => this.showAreaStatus(), 3000);
+    };
+    if (st) return show(st);
+    fetch('/map/buildings/area').then(r => (r.ok ? r.json() : null)).then(show).catch(() => show(null));
+  }
+
   /** What the server has of the map around the car (GET /map/status). */
   showMapStatus() {
     const out = this.mapStatus;
@@ -638,6 +693,7 @@ export class Settings {
       if (!st || out !== this.mapStatus) return;
       if (!st.center) { out.textContent = 'Waiting for a position.'; return; }
       out.textContent = `Within ${st.radius_km} km: ${st.roads_ready}/${st.tiles} road tiles, ${st.features_ready}/${st.tiles} feature tiles` +
+        (st.buildings ? `; within ${st.buildings_km} km: ${st.buildings_ready}/${st.buildings} building areas` : '') +
         (st.busy ? ', downloading' : '') + (st.errors ? `, ${st.errors} failed` : '');
     }).catch(() => { out.textContent = ''; });
   }

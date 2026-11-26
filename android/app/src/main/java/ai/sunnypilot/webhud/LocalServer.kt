@@ -144,6 +144,7 @@ class LocalServer(
                     path.startsWith("/map/tile/") -> serveTile(client, method, path, text)
                     path.startsWith("/map/features/") -> serveFeatures(client, method, path, text)
                     path.startsWith("/map/ways/") -> serveWays(client, method, path)
+                    path == "/map/buildings/area" -> servePrefetch(client, method, path, text)   // before the cells
                     path.startsWith("/map/buildings/") -> serveBuildings(client, method, path)
                     path.startsWith("/map/os/") || path.startsWith("/map/ossurf/") -> serveOs(client, method, path, text)
                     path == "/map/prefetch" || path == "/map/status" -> servePrefetch(client, method, path, text)
@@ -385,7 +386,8 @@ class LocalServer(
         out.flush()
     }
 
-    /** POST /map/prefetch {lat, lon, radius_km}: download the map around the car (MapPrefetch); GET /map/status: how far it got. */
+    /** POST /map/prefetch {lat, lon, radius_km, buildings_km}: download the map around the car (MapPrefetch); GET /map/status: how far it got.
+     *  POST /map/buildings/area {lat, lon, radius_km}: an area's buildings; GET: how far that got. */
     private fun servePrefetch(client: Socket, method: String, path: String, head: String) {
         val out = client.getOutputStream()
         val pf = mapPrefetch
@@ -394,7 +396,7 @@ class LocalServer(
             return
         }
         val status = try {
-            if (path == "/map/prefetch" && method == "POST") {
+            if ((path == "/map/prefetch" || path == "/map/buildings/area") && method == "POST") {
                 val length = header(head, "Content-Length")?.toIntOrNull() ?: 0
                 if (length <= 0 || length > MAX_BODY) throw IllegalArgumentException("no body")
                 val body = ByteArray(length)
@@ -406,9 +408,12 @@ class LocalServer(
                     got += n
                 }
                 val json = JSONObject(String(body, Charsets.UTF_8))
-                pf.request(json.getDouble("lat"), json.getDouble("lon"), json.optDouble("radius_km", 25.0))
+                if (path == "/map/buildings/area") pf.requestArea(json.getDouble("lat"), json.getDouble("lon"), json.optDouble("radius_km", 3.0))
+                else pf.request(json.getDouble("lat"), json.getDouble("lon"), json.optDouble("radius_km", 25.0), json.optDouble("buildings_km", Double.NaN))
             } else if (path == "/map/status" && method == "GET") {
                 pf.status()
+            } else if (path == "/map/buildings/area" && method == "GET") {
+                pf.areaStatus()
             } else {
                 respond(out, 405, "Method Not Allowed", "text/plain", "".toByteArray(), emptyMap(), false)
                 return

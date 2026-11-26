@@ -79,7 +79,8 @@ async function fetchWays(tlat, tlon) {
 }
 /** POST /map/prefetch: have the server download the map within km of the point (maptiles.py MapPrefetch). */
 async function fetchPrefetch(lat, lon, km) {
-  await fetch('/map/prefetch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat, lon, radius_km: km }) });
+  await fetch('/map/prefetch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lat, lon, radius_km: km, buildings_km: buildingsKm }) });
 }
 /** GET /map/os/<klat>/<klon>: a FEAT_DEG cell's Ordnance Survey road links (osroads.js, OsRoads.kt) with the user's key, or
  *  null. Only for cells in Great Britain, and only while that map data is on (a new key makes a new function, so the
@@ -99,6 +100,7 @@ function makeOsFetch(key, cap) {
   return f;
 }
 let prefetchKm = 25;
+let buildingsKm = 2;   // the buildings downloaded around the car too (Settings: Map download), 0 with buildings off
 let localT = -1e9;           // when the last IBUS frame came in (page clock, s)
 let localPostT = -1e9;       // when the car's view was last posted
 let rawAddrs = [];
@@ -175,6 +177,7 @@ self.onmessage = (ev) => {
       if (local && local.map) local.map.setOs(osFetch);
     } else if (msg.type === 'mapPrefetch') {
       prefetchKm = Number(msg.km) || 0;
+      if (msg.buildingsKm != null) buildingsKm = Math.max(0, Number(msg.buildingsKm) || 0);
       if (builder && builder.map) builder.map.setPrefetchKm(prefetchKm);
       if (local && local.map) local.map.setPrefetchKm(prefetchKm);
     }

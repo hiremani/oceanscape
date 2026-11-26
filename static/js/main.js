@@ -34,7 +34,7 @@ const DEFAULTS = {
   showTracks: true, showRadar: false, radarAllTracks: false, showLowConf: false, showObjectStats: false, objectMode: 'world',
   laneHeadingSign: 1, laneCurvatureSign: 1, objectHeadingSign: 1, laneConfThreshold: LANE_CONF_THRESHOLD,
   showFps: true, renderScale: 'auto', showMusic: true, showNav: true, demoInfotainment: false, demoCarState: false, carDemo: false,
-  calibration: true, mapPrefetchKm: 25, mapSource: 'auto', osKey: '', osCap: 5000, positionSource: 'car', roadcam: 'mirror', groundStyle: 'perforated',
+  calibration: true, mapPrefetchKm: 25, bldPrefetchKm: 2, mapSource: 'auto', osKey: '', osCap: 5000, positionSource: 'car', roadcam: 'mirror', groundStyle: 'perforated',
   layout: 'auto', drum: false, driverSide: 'auto',
   // Reality View phase 1
   showIntent: true, showProvenance: true, sunLight: true, sunTheme: true,
@@ -178,7 +178,7 @@ class App {
     if (key === 'showMusic' || key === 'showNav' || key === 'demoInfotainment') this.info.apply();
     if (key === 'demoCarState') this.carState.apply();
     if (key === 'calibration') this.worker.postMessage({ type: 'calibration', on: value });
-    if (key === 'mapPrefetchKm') this.worker.postMessage({ type: 'mapPrefetch', km: Number(value) });
+    if (key === 'mapPrefetchKm' || key === 'bldPrefetchKm' || key === 'showBuildings') this.postPrefetch(this.worker);
     if (key === 'mapSource' || key === 'osKey' || key === 'osCap') this.postOs(this.worker);
     if (key === 'positionSource') this.applyPositionSource();
     if (key === 'layout' || key === 'drum') this.updateLayout();
@@ -188,6 +188,12 @@ class App {
 
   /** The map data source (settings.js Map data): Ordnance Survey's road widths and surfaces on top of OSM, with the
    *  user's key; on Auto, in the UK (Great Britain's data: Northern Ireland's cells just come back empty). */
+  /** The map download around the car (Settings: Map download): its radius, and the buildings' (none with buildings off). */
+  postPrefetch(w) {
+    const s = this.settings;
+    w.postMessage({ type: 'mapPrefetch', km: Number(s.mapPrefetchKm ?? 25), buildingsKm: s.showBuildings === false ? 0 : Number(s.bldPrefetchKm ?? 2) });
+  }
+
   postOs(w) {
     const s = this.settings, c = currentCountry();
     const on = !!s.osKey && (s.mapSource === 'os' || (s.mapSource === 'auto' && !!c && c.gb));
@@ -298,7 +304,7 @@ class App {
       if (!this.workerReady && this.worker === w && attempt < 10) { w.terminate(); setTimeout(() => this.startWorker(attempt + 1), 2000); }
     };
     w.postMessage({ type: 'calibration', on: this.settings.calibration !== false });
-    w.postMessage({ type: 'mapPrefetch', km: Number(this.settings.mapPrefetchKm ?? 25) });
+    this.postPrefetch(w);
     this.postOs(w);
     w.postMessage({ type: 'position', source: this.settings.positionSource });
     const text = (path, required) => fetch(path, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(`${path}: ${r.status}`); return r.text(); })

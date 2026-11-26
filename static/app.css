@@ -276,6 +276,7 @@ p.desc b { color: var(--text); font-weight: 600; }
 .row .lbl small.cur { color: var(--text); opacity: .7; }
 .row.changed { background: var(--accent-soft); }
 .row.locked { opacity: .55; }
+.row.sub { padding-left: 28px; }   /* a sub-option under its switch (Settings -> Driving assists) */
 .row select, .row input[type=number], .row input[type=text] {
   min-width: 150px; max-width: 220px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg2); padding: 0 10px;
 }

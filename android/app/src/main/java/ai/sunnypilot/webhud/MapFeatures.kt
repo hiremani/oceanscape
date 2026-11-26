@@ -65,6 +65,9 @@ class MapFeatures(private val root: File) {
         return file.takeIf { it.isFile }
     }
 
+    /** Whether a building cell is on disk already (MapPrefetch skips it). */
+    fun haveBuildings(klat: Int, klon: Int): Boolean = File(root, "bld_${klat}_$klon.json").isFile
+
     private fun fetchBuildings(klat: Int, klon: Int, file: File) {
         val s = klat * BLD_DEG
         val w = klon * BLD_DEG
