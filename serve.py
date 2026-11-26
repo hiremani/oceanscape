@@ -7,6 +7,10 @@ does on the car, and relays the comma bridge's endpoints to a sunnypilot device.
   python3 serve.py --bridge sunnypilot.local    # relay /api, /ws and /map to the comma (port 8088)
   python3 serve.py --bridge 127.0.0.1:8088      # a bridge on this PC: python -m openpilot.sunnypilot.webhud.server --replay ...
 
+/map/buildings/<klat>/<klon> (static/js/buildings.js) is answered here, not relayed: the cell's buildings from the
+Overpass API, fetched once (one request at a time) and kept under ~/.cache/oceanscape/buildings, as the app's
+MapFeatures.kt does on the car. The comma's own server has no buildings.
+
 URL roots match the app and the bridge: "/" the page (static/), /vendor/ three.js, /models/ the Ocean model,
 /dbc/ the DBCs; unknown paths fall back to index.html so deep links work. A relayed request is forwarded
 byte for byte after its head, one request per connection, so the WebSocket upgrade passes unchanged.
@@ -14,8 +18,13 @@ Stdlib only.
 """
 import argparse
 import os
+import re
 import socket
 import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
@@ -32,7 +41,56 @@ BRIDGE: tuple[str, int] | None = None
 
 
 def relayed(path: str) -> bool:
-  return path in ("/ws", "/video") or path.startswith(("/api/", "/map/"))
+  return path in ("/ws", "/video") or (path.startswith(("/api/", "/map/")) and not path.startswith("/map/buildings/"))
+
+
+# ---- buildings (static/js/buildgeom.js BLD_DEG cells, from Overpass, kept on disk) ----------------------------------
+BLD_DEG = 0.01
+BLD_DIR = os.path.join(os.path.expanduser("~"), ".cache", "oceanscape", "buildings")
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+BLD_RETRY_S = 60
+_bld_lock = threading.Lock()
+_bld_failed: dict[str, float] = {}
+
+
+def building_cell(klat: int, klon: int) -> bytes | None:
+  """The cell's Overpass answer (JSON bytes), fetched once and kept; None when it can't be had."""
+  if not (-9000 <= klat < 9000 and -18000 <= klon < 18000):
+    return None
+  path = os.path.join(BLD_DIR, f"{klat}_{klon}.json")
+  if os.path.isfile(path):
+    with open(path, "rb") as f:
+      return f.read()
+  key = f"{klat},{klon}"
+  with _bld_lock:   # one Overpass request at a time
+    if os.path.isfile(path):
+      with open(path, "rb") as f:
+        return f.read()
+    if time.time() - _bld_failed.get(key, 0) < BLD_RETRY_S:
+      return None
+    s, w = klat * BLD_DEG, klon * BLD_DEG
+    bb = f"{s:.4f},{w:.4f},{s + BLD_DEG:.4f},{w + BLD_DEG:.4f}"
+    query = f'[out:json][timeout:90];(way["building"]({bb});relation["building"]["type"="multipolygon"]({bb}););out tags geom qt;'
+    req = urllib.request.Request(OVERPASS_URL, data=urllib.parse.urlencode({"data": query}).encode(),
+                                 headers={"User-Agent": "oceanscape-dev/1.0 (map buildings)", "Accept": "application/json"})
+    for attempt in range(3):
+      try:
+        with urllib.request.urlopen(req, timeout=150) as r:
+          body = r.read()
+        break
+      except urllib.error.HTTPError as e:
+        if e.code not in (429, 502, 503, 504) or attempt == 2:
+          _bld_failed[key] = time.time()
+          return None
+        time.sleep(3)
+      except OSError:
+        _bld_failed[key] = time.time()
+        return None
+    os.makedirs(BLD_DIR, exist_ok=True)
+    with open(path + ".part", "wb") as f:
+      f.write(body)
+    os.replace(path + ".part", path)
+    return body
 
 
 def pump(src: socket.socket, dst: socket.socket) -> None:
@@ -72,9 +130,23 @@ class Handler(SimpleHTTPRequestHandler):
     super().end_headers()
 
   def do_GET(self) -> None:
-    if relayed(urlparse(self.path).path):
+    path = urlparse(self.path).path
+    if path.startswith("/map/buildings/"):
+      return self.buildings(path)
+    if relayed(path):
       return self.relay()
     super().do_GET()
+
+  def buildings(self, path: str) -> None:
+    m = re.fullmatch(r"/map/buildings/(-?\d+)/(-?\d+)", path)
+    body = building_cell(int(m.group(1)), int(m.group(2))) if m else None
+    if body is None:
+      return self.send_error(404, "no buildings for this cell")
+    self.send_response(200)
+    self.send_header("Content-Type", "application/json")
+    self.send_header("Content-Length", str(len(body)))
+    self.end_headers()
+    self.wfile.write(body)
 
   def do_HEAD(self) -> None:
     if relayed(urlparse(self.path).path):

@@ -53,6 +53,40 @@ class MapFeatures(private val root: File) {
 
     fun haveWays(tlat: Int, tlon: Int): Boolean = waysFile(tlat, tlon).isFile
 
+    /**
+     * A building cell's Overpass answer (static/js/buildgeom.js: [BLD_DEG] square, the building ways and multipolygons
+     * with their outlines), fetched once and kept as `bld_<klat>_<klon>.json`, served whole (`/map/buildings/<klat>/<klon>`)
+     * for the page to parse and extrude; null when it can't be had.
+     */
+    fun buildings(klat: Int, klon: Int): File? {
+        if (klat < -9000 || klat >= 9000 || klon < -18000 || klon >= 18000) return null
+        val file = File(root, "bld_${klat}_$klon.json")
+        if (!ensure("buildings $klat/$klon", { file.isFile }) { fetchBuildings(klat, klon, file) }) return null
+        return file.takeIf { it.isFile }
+    }
+
+    private fun fetchBuildings(klat: Int, klon: Int, file: File) {
+        val s = klat * BLD_DEG
+        val w = klon * BLD_DEG
+        val bbox = "%.4f,%.4f,%.4f,%.4f".format(java.util.Locale.ROOT, s, w, s + BLD_DEG, w + BLD_DEG)
+        Log.i(TAG, "fetching buildings $klat/$klon ($bbox)")
+        var text: String? = null
+        for (attempt in 1..TRIES) {
+            try {
+                text = post(BUILDINGS_QUERY.replace("{bbox}", bbox))
+                break
+            } catch (e: BusyException) {
+                if (attempt == TRIES) throw e
+                Thread.sleep(RETRY_PAUSE_MS)
+            }
+        }
+        root.mkdirs()
+        val part = File(root, "${file.name}.part")
+        part.writeText(text!!)
+        if (!part.renameTo(file)) throw IOException("could not place ${file.name}")
+        Log.i(TAG, "buildings $klat/$klon: ${text.length} bytes")
+    }
+
     private fun waysFile(tlat: Int, tlon: Int) = File(root, "ways3_${tlat}_$tlon.json")   // 3: with the overtaking and lane_markings tags
 
     /** Fetch the road tile's way detail unless already on disk. True when it is. */
@@ -185,6 +219,9 @@ class MapFeatures(private val root: File) {
     companion object {
         private const val TAG = "WebHud"
         const val FEAT_DEG = 0.05
+        const val BLD_DEG = 0.01   // building cells (static/js/buildgeom.js)
+        private const val BUILDINGS_QUERY =
+            "[out:json][timeout:90];(way[\"building\"]({bbox});relation[\"building\"][\"type\"=\"multipolygon\"]({bbox}););out tags geom qt;"
         const val TILE_DEG = 0.25
         const val CELLS_PER_TILE = 5
         const val OVERPASS_URL = "https://overpass-api.de/api/interpreter"
@@ -215,6 +252,15 @@ out tags;"""
         fun parsePath(path: String): Pair<Int, Int>? {
             val parts = path.split('/')
             if (parts.size != 5 || parts[1] != "map" || parts[2] != "features") return null
+            val klat = parts[3].toIntOrNull() ?: return null
+            val klon = parts[4].toIntOrNull() ?: return null
+            return Pair(klat, klon)
+        }
+
+        /** `/map/buildings/<klat>/<klon>` -> (klat, klon), or null. */
+        fun parseBuildingsPath(path: String): Pair<Int, Int>? {
+            val parts = path.split('/')
+            if (parts.size != 5 || parts[1] != "map" || parts[2] != "buildings") return null
             val klat = parts[3].toIntOrNull() ?: return null
             val klon = parts[4].toIntOrNull() ?: return null
             return Pair(klat, klon)
