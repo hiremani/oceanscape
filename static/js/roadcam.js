@@ -11,6 +11,7 @@ import {
   lineRibbon, modelFor, parseFrame, pathDistance, projector,
 } from './roadcam_geom.js';
 import { CommaScreen } from './commaui.js';
+import { extraLatencyMs } from './measure_stats.js';   // drive measurements (measure.js)
 
 const MODELS_KEPT = 30;          // 1.5 s of model output, to match frames against
 // A decoded frame waits at most this long for the model output computed from it (it's usually there already).
@@ -56,8 +57,13 @@ export class RoadCam {
     this.error = null;
     this.lastFrameAt = 0;
     this.dirty = false;
-    this.stats = { since: performance.now(), rx: 0, decoded: 0, shown: 0, skipped: 0, gaps: 0, lastId: -1 };
+    this.stats = { since: performance.now(), rx: 0, decoded: 0, shown: 0, skipped: 0, gaps: 0, lastId: -1, decodeSum: 0, decodeN: 0, lagSum: 0, lagN: 0 };
     this.camStats = null;         // the last second's frame rates, while frames come in (perf.js shows them)
+    // drive measurements (measure.js): the last second's video path, when each frame went into the decoder, and the
+    // smallest arrival - encode-stamp offset seen (the comma's clock: only differences from it mean anything)
+    this.measured = null;
+    this.decIn = new Float64Array(64);
+    this.lagBest = null;
     for (const b of this.root.querySelectorAll('[data-roadcam]')) {
       b.addEventListener('click', (e) => { e.stopPropagation(); this.setMode(b.dataset.roadcam); this.showControls(); });
     }
@@ -167,6 +173,7 @@ export class RoadCam {
     setClass(this.root, 'hidden', true);
     this.markButton();
     this.camStats = null;
+    this.measured = null;   // drive measurements (measure.js)
     clearTimeout(this.retryTimer);
     const ws = this.ws;
     this.ws = null;
@@ -284,6 +291,10 @@ export class RoadCam {
     st.rx++;
     if (st.lastId >= 0 && f.frameId > st.lastId + 1) st.gaps += f.frameId - st.lastId - 1;   // dropped before they got here
     st.lastId = f.frameId;
+    // drive measurements (measure.js): how much later than its best this frame arrived
+    const lag = extraLatencyMs(this.lastFrameAt, f.tsNs, this.lagBest);
+    if (lag.lag != null && lag.lag > 10000) this.lagBest = null;   // the comma restarted (new clock)
+    else if (lag.lag != null) { this.lagBest = lag.best; st.lagSum += lag.lag; st.lagN++; }
     if (this.needKey && !f.key) return;
     if (f.key && !this.decoder) {
       if (!this.configuring) {
@@ -297,6 +308,7 @@ export class RoadCam {
     this.needKey = false;
     try {
       // the timestamp carries the frame id through the decoder
+      this.decIn[f.frameId & 63] = performance.now();   // drive measurements (measure.js)
       this.decoder.decode(new EncodedVideoChunk({ type: f.key ? 'key' : 'delta', timestamp: f.frameId, data: f.data }));
     } catch (e) {
       this.fail(e);
@@ -319,6 +331,8 @@ export class RoadCam {
         output: (frame) => {
           if (!this.isOpen || camera !== this.camera || decoder !== this.decoder) { frame.close(); return; }
           this.stats.decoded++;
+          const t0 = this.decIn[frame.timestamp & 63];   // drive measurements (measure.js): decode time
+          if (t0 > 0) { this.stats.decodeSum += performance.now() - t0; this.stats.decodeN++; }
           this.pending.push({ frame, frameId: frame.timestamp, camera, at: performance.now() });
           while (this.pending.length > MAX_HELD) { this.pending.shift().frame.close(); this.stats.skipped++; }
         },
@@ -326,6 +340,7 @@ export class RoadCam {
       });
       decoder.configure(config);
       this.codec = codec;
+      this.decoderHw = config.hardwareAcceleration;   // drive measurements (measure.js)
       this.decoder = decoder;
       this.needKey = true;
     } catch (e) {
@@ -374,13 +389,17 @@ export class RoadCam {
   }
 
   resetStats() {
-    Object.assign(this.stats, { since: performance.now(), rx: 0, decoded: 0, shown: 0, skipped: 0, gaps: 0 });
+    Object.assign(this.stats, { since: performance.now(), rx: 0, decoded: 0, shown: 0, skipped: 0, gaps: 0, decodeSum: 0, decodeN: 0, lagSum: 0, lagN: 0 });
   }
 
   /** Frames per second at each step, for the frame-rate chip (perf.js): where frames go missing, if they do. */
   showStats(now) {
     const st = this.stats, secs = (now - st.since) / 1000, r = (n) => Math.round(n / secs);
     this.camStats = st.rx ? { rx: r(st.rx), decoded: r(st.decoded), shown: r(st.shown), lost: r(st.gaps), skipped: r(st.skipped) } : null;
+    // drive measurements (measure.js): the same second with the decode time, arrival delay and decoder queue
+    this.measured = this.camStats && { ...this.camStats, camera: this.camera, hw: this.decoderHw || null,
+      decodeMs: st.decodeN ? st.decodeSum / st.decodeN : null, lagMs: st.lagN ? st.lagSum / st.lagN : null,
+      queue: this.decoder ? this.decoder.decodeQueueSize : null };
     this.resetStats();
   }
 

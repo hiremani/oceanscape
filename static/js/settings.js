@@ -7,6 +7,7 @@ import { RX_IDS } from './ibus_tables.js';
 import { CommaPanel } from './comma.js';
 import { GROUND_STYLES } from './groundstyle/index.js';
 import { currentCountry } from './regional.js';
+import { capsRows } from './measure.js';   // drive measurements (About)
 import { profileState, profileRows, limitOffsets, provenance, versionsState } from './profile_view.js';
 
 // tab -> what it needs the comma for
@@ -866,6 +867,41 @@ export class Settings {
 
   // ---- about ------------------------------------------------------------------------------------------
 
+  // ---- drive measurements (measure.js) --------------------------------------------------------------
+
+  // What this screen can do and how it kept up on the drives: the numbers the Reality View plan's Phase 0 needs.
+  measureSection() {
+    const m = this.app.measure;
+    if (!m) return null;
+    const on = this.app.settings.measure !== false;
+    const download = () => {
+      const blob = new Blob([JSON.stringify(m.export(), null, 1)], { type: 'application/json' });
+      const a = el('a', { href: URL.createObjectURL(blob), download: `oceanscape-measurements-${new Date().toISOString().slice(0, 10)}.json` });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    };
+    const copy = async () => {
+      try { await navigator.clipboard.writeText(JSON.stringify(m.export())); this.app.toast('Copied'); } catch (e) { this.app.toast(`Couldn't copy: ${e.message}`); }
+    };
+    const drives = m.drives.slice().reverse();
+    return el('div.section',
+      el('h3', 'Drive measurements'),
+      el('p.desc', 'How this screen keeps up on a drive: frame rate, frame time, draw calls, triangles, resolution, the camera ' +
+        'window\'s video and memory, once a second, moving and parked. A line a minute also goes to the Android log ' +
+        '(adb logcat, "[measure]"). Kept here for the last few drives.'),
+      el('div.rows',
+        el('div.row', el('div.lbl', el('b', 'Record measurements'), el('small', on ? m.summaryText() : 'Off.')),
+          this.app.switch(on, v => { this.app.setSetting('measure', v); this.show('about', true); }))),
+      el('div.kv', capsRows(m.caps).flatMap(([k, v]) => [el('span', k), el('span', v)])),
+      drives.length ? el('details', el('summary', `Kept drives (${drives.length})`),
+        el('div.kv', drives.flatMap(d => [el('span', new Date(d.start * 1000).toLocaleString()), el('span', d.summary ? describeShort(d.summary) : 'no samples')]))) : null,
+      el('div.row', el('button.btn', { onclick: download }, 'Download JSON'), el('button.btn', { onclick: copy }, 'Copy JSON'),
+        el('button.btn', { onclick: () => { m.clear(); this.app.toast('Cleared'); this.show('about', true); } }, 'Clear')),
+    );
+  }
+
   async renderAbout() {
     const body = this.body;
     // the app's version and its updates, as on the car controls' Software sheet (appupdate.js)
@@ -887,6 +923,7 @@ export class Settings {
         ...st.urls.flatMap(u => [el('span', u.includes('.local') ? 'mDNS' : 'IP'), el('a', { href: u }, u)]),
       )));
     }
+    body.append(this.measureSection());   // drive measurements (measure.js)
     body.append(el('p.desc', 'Touch: one finger rotates around the car, two fingers zoom and pan. The view recenters on the car a few seconds after you let go.'));
     body.append(el('div.section', el('h3', 'Credits'), el('p.desc',
       'Fisker Ocean 3D model: Pulse Ocean v0.10. Paint colors are approximations of the factory paint chips (',
@@ -894,4 +931,9 @@ export class Settings {
       el('a', { href: 'https://www.carwow.co.uk/fisker/ocean/colours', target: '_blank' }, 'Carwow'),
       '). 3D rendering by three.js (MIT).')));
   }
+}
+
+// one kept drive in a line: length, median fps, the share under 30 fps
+function describeShort(sm) {
+  return `${Math.round((sm.seconds || 0) / 60)} min · ${sm.fps ? sm.fps.p50 : '–'} fps median · ${sm.under30Pct}% under 30`;
 }

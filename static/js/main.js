@@ -7,6 +7,7 @@ import { OCEAN_PAINT_DEFAULT, OCEAN_WHEELS_DEFAULT } from './models.js';
 import { LANE_CONF_THRESHOLD } from './road.js';
 import { Hud } from './hud.js';
 import { FrameMeter } from './perf.js';
+import { Measurements } from './measure.js';   // drive measurements (Settings > About)
 import { Infotainment } from './infotainment.js';
 import { CarState } from './carstate.js';
 import { CarCommands } from './cancmd.js';
@@ -34,6 +35,7 @@ const DEFAULTS = {
   layout: 'auto', drum: false, driverSide: 'auto',
   // Reality View phase 1
   showIntent: true, showProvenance: true, sunLight: true, sunTheme: true,
+  measure: true,   // drive measurements (measure.js)
 };
 
 function loadSettings() {
@@ -115,6 +117,7 @@ class App {
     this.connect();
 
     this.meter = new FrameMeter(this);
+    this.measure = new Measurements(this);   // drive measurements: reads the meter and the camera once a second
     this.info = new Infotainment(this);
     this.carState = new CarState(this);
     this.cmd = new CarCommands(this);   // sending to the car, through the app

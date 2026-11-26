@@ -58,6 +58,9 @@ export class FrameMeter {
       this.stats = { fps, worst: w.worst, median, work: w.work / w.frames, calls: r.calls, tris: r.triangles };
       // a page the browser calls hidden may be throttled (a covered window): not slow, so auto waits
       if (this.app.settings.renderScale === 'auto' && !document.hidden) this._auto(fps, median, now);
+    } else if (w.frames > 0 && !document.hidden) {
+      // drive measurements (measure.js): a visible page this slow is the case worth recording, not a hidden one
+      this.slowWindow = { fps, median: null, worst: w.worst, work: w.work / w.frames, calls: r.calls, tris: r.triangles };
     }
     this._reset(now);
     this._show();
