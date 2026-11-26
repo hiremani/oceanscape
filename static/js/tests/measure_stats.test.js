@@ -140,3 +140,29 @@ test('a second too slow for the meter\'s median still counts its frame rate', ()
   assert.equal(s.under30Pct, 100);
   assert.equal(s.frameMs, null);
 });
+
+test('frame rate is split by which Reality View feature is drawing, with each feature\'s own cost', () => {
+  const d = new DriveStats(0);
+  for (let i = 0; i < 20; i++) d.add(sample(i, 50, { features: { buildings: false, camRoad: false } }));
+  for (let i = 20; i < 30; i++) d.add(sample(i, 28, { features: { buildings: true, camRoad: false }, buildingTris: 100000 }));
+  for (let i = 30; i < 35; i++) d.add(sample(i, 22, { features: { buildings: true, camRoad: true }, buildingTris: 100000,
+    camRoad: { uploadMs: 0.4, ageMs: 130 } }));
+  const s = d.summary();
+  assert.equal(s.byFeature.buildings.on.samples, 15);
+  assert.equal(s.byFeature.buildings.off.samples, 20);
+  assert.equal(s.byFeature.camRoad.on.samples, 5);
+  assert.ok(s.byFeature.buildings.on.fps.p50 < s.byFeature.buildings.off.fps.p50);
+  assert.equal(s.byFeature.camRoad.on.under30Pct, 100);
+  assert.ok(s.buildingTris.p50 >= 95000 && s.buildingTris.p50 <= 105000);
+  assert.ok(s.camRoad.ageMs.p50 >= 125 && s.camRoad.ageMs.p50 <= 135);
+});
+
+test('samples without feature info count as everything off (older samples, features missing)', () => {
+  const d = new DriveStats(0);
+  for (let i = 0; i < 5; i++) d.add(sample(i, 40));
+  const s = d.summary();
+  assert.equal(s.byFeature.buildings.off.samples, 5);
+  assert.equal(s.byFeature.buildings.on, null);
+  assert.equal(s.buildingTris, undefined);
+  assert.equal(s.camRoad, undefined);
+});

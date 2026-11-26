@@ -58,6 +58,9 @@ function round(v, d = 1) {
   return Math.round(v * k) / k;
 }
 
+// the Reality View features split out in byFeature: buildings drawing (buildings.js), camera on the road (videoground.js)
+export const FEATURES = ['buildings', 'camRoad'];
+
 export function objectBucket(n) {
   const v = Number.isFinite(n) ? n : 0;
   return OBJECT_BUCKETS.find(([lo, hi]) => v >= lo && v <= hi)[2];
@@ -97,6 +100,11 @@ class Span {
     this.moving = new FrameGroup();
     this.parked = new FrameGroup();
     this.byObjects = Object.fromEntries(OBJECT_BUCKETS.map(([, , k]) => [k, new FrameGroup()]));
+    // frame rate with each Reality View feature drawing or not: what decides whether it can stay on (the report's
+    // Phase 0 gates); a feature counts as on only while it actually draws
+    this.byFeature = Object.fromEntries(FEATURES.map(k => [k, { on: new FrameGroup(), off: new FrameGroup() }]));
+    this.buildingTris = new Hist(4e6, 5000);
+    this.camRoad = { uploadMs: new Hist(100, 0.05), ageMs: new Hist(2000, 5) };
     this.work = new Hist(1000, 0.25);     // the HUD's own script time per frame (ms)
     this.worst = new Hist(1000, 1);       // the slowest frame of each second (ms)
     this.calls = new Hist(4000, 1, true);
@@ -120,6 +128,14 @@ class Span {
     this.scale.add(s.scale);
     if (s.heapMB != null) this.heapMB.add(s.heapMB);
     this.objects.add(s.objects);
+    const f = s.features || {};
+    for (const k of FEATURES) this.byFeature[k][f[k] ? 'on' : 'off'].add(s, dt);
+    if (f.buildings && s.buildingTris != null) this.buildingTris.add(s.buildingTris);
+    const r = s.camRoad;
+    if (f.camRoad && r) {
+      if (r.uploadMs != null) this.camRoad.uploadMs.add(r.uploadMs);
+      if (r.ageMs != null) this.camRoad.ageMs.add(r.ageMs);
+    }
     const c = s.cam;
     if (c) {
       const k = this.cam;
@@ -153,6 +169,15 @@ class Span {
       out.cam = { seconds: round(k.seconds, 0), rxFps: per(k.rx), decodedFps: per(k.decoded), shownFps: per(k.shown),
         lostFps: per(k.lost), skippedFps: per(k.skipped), queue: k.queue.summary(), decodeMs: k.decodeMs.summary(), lagMs: k.lagMs.summary() };
     }
+    out.byFeature = {};
+    for (const k of FEATURES) {
+      const on = this.byFeature[k].on.summary(), off = this.byFeature[k].off.summary();
+      if (on || off) out.byFeature[k] = { on, off };
+    }
+    if (this.buildingTris.n) out.buildingTris = this.buildingTris.summary();
+    if (this.camRoad.uploadMs.n || this.camRoad.ageMs.n) {
+      out.camRoad = { uploadMs: this.camRoad.uploadMs.summary(), ageMs: this.camRoad.ageMs.summary() };
+    }
     if (detail) {
       out.byObjects = {};
       for (const [key, g] of Object.entries(this.byObjects)) {
@@ -167,7 +192,7 @@ class Span {
 /**
  * One drive's measurements. add() about once a second with a sample:
  *   {t (s), fps, median (ms, or null in a second too slow for it), worst (ms), work (ms), calls, tris, scale, speed (m/s),
- *    objects, heapMB?,
+ *    objects, heapMB?, features?: {buildings, camRoad} (drawing now), buildingTris?, camRoad?: {uploadMs, ageMs},
  *    cam?: {rx, decoded, shown, lost, skipped (frames in the second), queue, decodeMs, lagMs}}
  * A sample after a gap counts for at most MAX_DT seconds, so a sleeping screen doesn't count as slow time.
  */

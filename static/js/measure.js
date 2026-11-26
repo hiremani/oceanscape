@@ -85,6 +85,7 @@ export class Measurements {
       t, fps: st.fps, median: st.median, worst: st.worst, work: st.work, calls: st.calls, tris: st.tris,
       scale: scene.renderScale, speed: app.vehicle ? app.vehicle.speed : 0, objects: drawnObjects(scene, app.settings),
       heapMB: mem ? mem.usedJSHeapSize / 1048576 : null, cam: cam || null,
+      ...featureSample(app),
     };
   }
 
@@ -121,6 +122,19 @@ export class Measurements {
     const sm = this.drive ? this.drive.summary() : (this.drives.length ? this.drives[this.drives.length - 1].summary : null);
     return describe(sm);
   }
+}
+
+// what the Reality View features are drawing and costing right now (buildings.js stats(), videoground.js stats)
+function featureSample(app) {
+  let b = null, v = null;
+  try { b = app.scene.buildings && app.scene.buildings.stats(); } catch { b = null; }
+  v = app.videoGround && app.videoGround.stats;
+  const buildings = !!(b && b.visible && b.tris > 0), camRoad = !!(v && v.on && v.framesUsed > 0);
+  return {
+    features: { buildings, camRoad },
+    buildingTris: b ? b.tris : null,
+    camRoad: camRoad ? { uploadMs: v.uploadMs, ageMs: v.ageMs } : null,
+  };
 }
 
 // objects drawn right now (world model, the car's own objects, radar ghosts), the view's load besides the road
