@@ -641,6 +641,7 @@ export function junctions(ref, hm) {
     if (b.along < -BEHIND_ARMS_M || b.pts.length < 2) continue;
     const bp = densifyPts(b.pts, 3);
     const P0 = bp[0];
+    if (!P0 || !Number.isFinite(P0[0]) || !Number.isFinite(P0[1])) continue;   // a degenerate branch (seen once on a replay)
     // our direction and station at the junction: the node is a vertex of the reference (a horizon node ahead, a passed
     // node in the trail behind), and the direction we *arrive* there with is the segment ending at it -- exact and the
     // same from frame to frame (the reference may turn at the node, the horizon bending into the road we're taking: the
