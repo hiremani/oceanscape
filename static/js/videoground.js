@@ -44,13 +44,14 @@ const ema = (avg, v, n) => (n < WARMUP ? 0 : n === WARMUP ? v : avg + (v - avg) 
 // One camera's contribution at a car-frame ground point: its colour, and its weight (0 = nothing usable there).
 const SAMPLE_GLSL = `
 uniform vec4 uCam;   // camera x ahead of the bumper (m), y left (m), height over the road (m), road rise per m
+uniform float uCurv; // the rise's change per m (videoground_geom.js carToCalib)
 float rampUp(float a, float b, float v) { return clamp((v - a) / (b - a), 0.0, 1.0); }
 vec4 sampleCam(sampler2D tex, mat3 M, vec4 S, vec4 T, vec4 objs[${MAX_OBJECTS}], int n, vec2 car, vec2 range) {
   if (S.z < 0.5) return vec4(0.0);
   // the ground point where it was in the car frame at capture
   vec2 c = vec2(T.x * car.x - T.y * car.y + T.z, T.y * car.x + T.x * car.y + T.w);
   float f = c.x - uCam.x, l = c.y - uCam.y;
-  vec3 q = M * vec3(f, -l, uCam.z - uCam.w * f);   // a rising road comes up toward the camera (calib z down)
+  vec3 q = M * vec3(f, -l, uCam.z - uCam.w * f - uCurv * f * f);   // a rising road comes up toward the camera (calib z down)
   if (q.z < 1e-3) return vec4(0.0);
   vec2 uv = q.xy / q.z / S.xy;
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
@@ -270,7 +271,7 @@ export class VideoGround {
     // two slots in every shader (0 and 1), filled with whichever cameras are in use
     this.slots = [sourceUniforms(), sourceUniforms()];
     const shared = {
-      uCam: { value: new THREE.Vector4(-1.6, 0, 1.22, 0) },
+      uCam: { value: new THREE.Vector4(-1.6, 0, 1.22, 0) }, uCurv: { value: 0 },
       uTex0: this.slots[0].uTex, uM0: this.slots[0].uM, uS0: this.slots[0].uS, uT0: this.slots[0].uT, uR0: this.slots[0].uR, uObj0: this.slots[0].uObj, uN0: this.slots[0].uN,
       uTex1: this.slots[1].uTex, uM1: this.slots[1].uM, uS1: this.slots[1].uS, uT1: this.slots[1].uT, uR1: this.slots[1].uR, uObj1: this.slots[1].uObj, uN1: this.slots[1].uN,
     };
@@ -413,7 +414,9 @@ export class VideoGround {
     // the camera and the road under it
     const fit = groundFit(this.model);
     const camX = modelXOffset(this.cs.state);
-    this.shared.uCam.value.set(camX, 0, fit.h, fit.slope);
+    const road = fit.quad || { h: fit.h, slope: fit.slope, curv: 0 };   // the curved profile (groundFit)
+    this.shared.uCam.value.set(camX, 0, road.h, road.slope);
+    this.shared.uCurv.value = road.curv;
     const axle = this.cs.ego && this.cs.ego.userData && this.cs.ego.userData.rearAxleZ != null ? this.cs.ego.userData.rearAxleZ : REAR_AXLE_DEFAULT;
     const footprints = this._footprints();
 

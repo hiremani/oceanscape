@@ -20,10 +20,11 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 /** A car-frame ground point (x, y, height above the road) in the calib frame, with the camera `cam`:
  *  {x: m ahead of the bumper (negative: behind it), y: m left, h: camera height over the road, slope: road
- *  rise per m ahead (calib z down gets smaller where the road rises)}. */
+ *  rise per m ahead (calib z down gets smaller where the road rises), curv: the rise's own change per m
+ *  (the road's height ahead is h - slope f - curv f^2 below the camera, f m ahead of it)}. */
 export function carToCalib(x, y, up, cam) {
   const f = x - cam.x;
-  return [f, -(y - (cam.y || 0)), cam.h - (cam.slope || 0) * f - up];
+  return [f, -(y - (cam.y || 0)), cam.h - (cam.slope || 0) * f - (cam.curv || 0) * f * f - up];
 }
 
 /** [u, v] in 0..1 of the stream (v down) for a calib-frame point, or null behind the camera or off the frame. */
@@ -59,16 +60,46 @@ export function groundFit(model) {
     if (((model.laneProbs || [])[i] ?? 0) < 0.4 || !Array.isArray(line)) return;
     for (const p of line) if (p && p[0] >= 6 && p[0] <= 40 && Number.isFinite(p[2])) pts.push(p);
   });
-  if (pts.length < 6) return { h: h0, slope: 0 };
+  const flat = { h: h0, slope: 0, quad: { h: h0, slope: 0, curv: 0 } };
+  if (pts.length < 6) return flat;
   // least squares z = a + b x
   let sx = 0, sz = 0, sxx = 0, sxz = 0;
   for (const [x, , z] of pts) { sx += x; sz += z; sxx += x * x; sxz += x * z; }
   const n = pts.length, den = n * sxx - sx * sx;
-  if (Math.abs(den) < 1e-6) return { h: h0, slope: 0 };
+  if (Math.abs(den) < 1e-6) return flat;
   const b = (n * sxz - sx * sz) / den, a = (sz - b * sx) / n;
   // a camera 0.5-3 m over the road, and no road steeper than 15 %: else the fit is noise
-  if (!(a > 0.5 && a < 3) || Math.abs(b) > 0.15) return { h: h0, slope: 0 };
-  return { h: a, slope: -b };   // z down shrinks where the road rises: slope is the rise per m
+  if (!(a > 0.5 && a < 3) || Math.abs(b) > 0.15) return flat;
+  // z down shrinks where the road rises: slope is the rise per m. `quad` follows a road whose rise changes (a hill's
+  // crest or dip): on such a road the straight fit puts the far road metres off along it (a 2 px error at 37 m is
+  // about 6 m), which the video on the road shows; quad is for it, the straight fit for flat-plane users (npu_geom)
+  return { h: a, slope: -b, quad: quadFit(pts) || { h: a, slope: -b, curv: 0 } };
+}
+
+/** z = a + b x + c x^2 over the points (needs 8 or more spanning 15 m), as {h, slope, curv} (rise convention), or null
+ *  when it's ill-conditioned or implausible (camera 0.5-3 m up, under 15 % grade, |curv| under 0.003 per m). */
+export function quadFit(pts) {
+  if (pts.length < 8) return null;
+  let lo = Infinity, hi = -Infinity;
+  for (const p of pts) { lo = Math.min(lo, p[0]); hi = Math.max(hi, p[0]); }
+  if (hi - lo < 15) return null;
+  // normal equations in x scaled to [0, 1] for conditioning
+  const k = 1 / hi;
+  const S = [0, 0, 0, 0, 0], T = [0, 0, 0];
+  for (const [x0, , z] of pts) {
+    const x = x0 * k, x2 = x * x;
+    S[0] += 1; S[1] += x; S[2] += x2; S[3] += x2 * x; S[4] += x2 * x2;
+    T[0] += z; T[1] += x * z; T[2] += x2 * z;
+  }
+  const A = [[S[0], S[1], S[2]], [S[1], S[2], S[3]], [S[2], S[3], S[4]]];
+  const det3 = (m) => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const D = det3(A);
+  if (!(Math.abs(D) > 1e-9)) return null;
+  const col = (j) => A.map((row, i) => row.map((v, c) => (c === j ? T[i] : v)));
+  const a = det3(col(0)) / D, b = det3(col(1)) / D * k, c = det3(col(2)) / D * k * k;
+  if (!(a > 0.5 && a < 3) || Math.abs(b) > 0.15 || Math.abs(c) > 0.003) return null;
+  return { h: a, slope: -b, curv: -c };
 }
 
 /** The pose (scene.js this.pose: x, y, h) at time t from a history of {t, x, y, h} oldest first, interpolated. */
