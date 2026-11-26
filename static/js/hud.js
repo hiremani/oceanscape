@@ -2,6 +2,7 @@ import { cameraSignUnit, cameraSignValue, signStyle, leftTraffic } from './regio
 // DOM overlay: speed, gear, steering assist (MADS), ACC set speed + gap, speed limit, telltales, alerts.
 import { $, $$, el, icon, iconSvg, setClass, setText, setClassName, setStyleVar, prettyLabel, MS_TO_KPH, MS_TO_MPH } from './util.js';
 import { EnergyDetails } from './energy.js';
+import { speedSourceLabel } from './intent.js';   // Reality View phase 1
 
 const BELT_HOLD_S = 1.5;   // s the driver's belt must read unbuckled before its light shows
 
@@ -151,7 +152,7 @@ export class Hud {
     setClass(this.blinkL, 'on', vehicle.lamps.left);
     setClass(this.blinkR, 'on', vehicle.lamps.right);
 
-    this._assist(op, f, unit, conv);
+    this._assist(op, f, unit, conv, settings);
     this._limit(op, f, unit, conv, v, settings);
     this._telltales(op, f, cs, lights);
     this._alerts(state, op, f);
@@ -212,7 +213,7 @@ export class Hud {
     }
   }
 
-  _assist(op, f, unit, conv) {
+  _assist(op, f, unit, conv, settings = {}) {
     const mads = op.selfdriveStateSP && op.selfdriveStateSP.mads;
     const cc = op.carControl;
     const ss = op.selfdriveState;
@@ -268,6 +269,9 @@ export class Hud {
       const parts = [];
       if (latText) parts.push(latText);
       if (engaged) parts.push(set != null ? `ACC ${Math.round(set)}` : 'ACC');
+      // Reality View phase 1: which of the speed planner's sources is slowing the car (intent.js; Display -> Planner intent)
+      const why = settings.showIntent !== false ? speedSourceLabel(op) : null;
+      if (why) parts.push(why);
       text = parts.join(' · ');
     } else if (op.selfdriveState && op.selfdriveState.experimentalMode) text = 'Experimental mode';
     const bold = latCls === 'active' || engaged, key = (bold ? 'b:' : ':') + text;

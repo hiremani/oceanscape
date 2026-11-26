@@ -444,6 +444,11 @@ export class Settings {
     const body = this.body;
     body.append(el('div.section', el('h3', 'Theme'),
       this.app.segmented([['auto', 'Auto'], ['light', 'Day'], ['dark', 'Night']], s.theme, v => set('theme', v))));
+    // Reality View phase 1: the sun where the car is (sun.js)
+    body.append(this.toggleRows([
+      ['sunTheme', 'Auto follows sunset', 'With the theme on Auto, night after sunset and day after sunrise where the car is (from the GPS), instead of the device\'s dark mode.'],
+      ['sunLight', 'Sun lighting', 'Light the scene like the sun where the car is: dimmer and warmer when it\'s low, and from its direction once the heading is known.'],
+    ]));
     body.append(el('div.section', el('h3', 'Layout'),
       el('p.desc', 'Wide strip: for a short band across the screen, like the HUD beside another app in split screen. The car in the ' +
         'middle, only the speed, gear, steering, set speed and limit in the driver\'s corner and the battery and power in the other. Auto picks it ' +
@@ -536,7 +541,8 @@ export class Settings {
       ['mapRoad', 'Map road', 'Draw the road from the map: the roads around you, their junctions, and what stands along them, placed by the car\'s own motion with the GPS and heading eased in. The cameras\' lanes only pick the lane you\'re drawn in. Off, or without a map, the road is the cameras\' alone.'],
       ['showGround', 'Ground texture', 'Fine textured ground that moves under the car with its speed and steering.'],
       ['showSigns', 'Traffic lights & signs', 'The map\'s signals, stop and yield signs, limits and crossings where the map has them (the signal ahead shows the camera\'s light), and the lights, signs and stop lines the car\'s camera reports, placed where they most likely are.'],
-      ['showPath', 'Planned path', 'Blue band along openpilot\'s path while steering is engaged.'],
+      ['showPath', 'Planned path', 'Blue band along openpilot\'s path while it steers or controls the speed.'],
+      ['showIntent', 'Planner intent', 'What openpilot is about to do: chevrons on its path toward a lane change, a red bar where its plan stops, and in the status line what is slowing the car (a stop sign, a turn, your speed, a wet road...).'],
     ]));
     // the map around the car is downloaded ahead and kept (maptiles.py MapPrefetch)
     this.mapStatus = el('small.cur', '');
@@ -641,6 +647,7 @@ export class Settings {
         'that the radar draws as a wide thin strip, that it hasn\'t classified (point targets need a camera detection too), ' +
         'or that it has tracked for under 1.3 s.'],
       ['showUss', 'Parking sensors', 'Ultrasonic zone arcs around the car at low speed.'],
+      ['showProvenance', 'Show what\'s remembered', 'World model: an object a sensor is measuring now is solid; one nothing has measured for a moment, kept from memory, fades to a grey ghost within a second, so a car that has gone never stays solid on the road.'],
     ]));
   }
 

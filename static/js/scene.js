@@ -22,6 +22,10 @@ import { RoadNetwork } from './roadnet.js';
 import { MapFeatures } from './mapfeatures.js';
 import { RouteView } from './routeview.js';
 import { STEER_RATIO } from './vehicle.js';
+// Reality View phase 1: planner intent on the road, provenance styling, sun lighting
+import { speedSourceLabel, stopPoint, laneChangeIntent, chevrons, barAcross } from './intent.js';
+import { staleness, solidity, provenanceStyle } from './provenance.js';
+import { sunPosition, sunLighting, sunDirection } from './sun.js';
 
 const EGO_LEN = 4.775;
 const EGO_W = 1.98;
@@ -139,7 +143,13 @@ export const VIEWS = {
   top: { r: 26, phi: 0.04, theta: 0, offY: 0.0 },
   close: { r: 8.5, phi: 1.12, theta: 0.65, offY: 0.06 },
   far: { r: 36, phi: 0.9, theta: 0, offY: 0.26 },
+  // Reality View's composition: higher and farther behind than chase, the car low in the frame with the road ahead
+  drone: { r: 30, phi: 0.88, theta: 0, offY: 0.3 },
 };
+// the views that follow behind the car: they back off with speed (chase, drone) and swing round to look from the
+// front in Reverse (all of them)
+const DOLLY_VIEWS = new Set(['chase', 'drone']);
+const FOLLOW_VIEWS = new Set(['chase', 'drone', 'close', 'far']);
 // the drum horizon (drum.js): the drum's radius (m), and the chase view over it, lower, so the road falls away over
 // its edge with the background above, as in the concept's renders
 const DRUM_R = 120;
@@ -383,6 +393,8 @@ export class CarScene {
       modelEdge: lineMaterial(0x6c727b, 0.5), path: lineMaterial(0x3e6ae1, 0.16), slot: lineMaterial(0x3e6ae1, 0.8),
       ussRed: lineMaterial(0xe5413a, 0.9), ussAmber: lineMaterial(0xf0a020, 0.9), ussYellow: lineMaterial(0xe8d23a, 0.85),
       ussGreen: lineMaterial(0x2fa84f, 0.6),
+      // planner intent (intent.js): the lane change's chevrons and the bar where the plan stops
+      intentChevron: lineMaterial(0x3e6ae1, 0.85), intentStop: lineMaterial(0xe5413a, 0.85),
       // inferred (procedural) lane lines
       lineSoft: lineMaterial(0x8e949d, 0.55), lineYellowSoft: lineMaterial(0xdcaa2e, 0.5), lineBlueSoft: lineMaterial(0x3e6ae1, 0.5),
       // stop lines and crosswalks
@@ -397,13 +409,15 @@ export class CarScene {
     for (const k of ['line', 'lineEgo', 'lineBlue', 'lineYellow', 'lineRed', 'edge', 'lineSoft', 'lineYellowSoft', 'lineBlueSoft']) this.field.mask(this.mats[k], 'road');
     this.field.mask(this.mats.marking, 'ground');
     // the overlays on the road fade toward the drum horizon (drum.js), as the road under them does
-    for (const k of ['path', 'slot', 'ussRed', 'ussAmber', 'ussYellow', 'ussGreen']) fadeAtDrum(this.mats[k]);
+    for (const k of ['path', 'slot', 'ussRed', 'ussAmber', 'ussYellow', 'ussGreen', 'intentChevron', 'intentStop']) fadeAtDrum(this.mats[k]);
     this.ribbons = {};
     for (const key of Object.keys(this.mats)) {
       this.ribbons[key] = new Ribbon(this.mats[key], key === 'path' ? 128 : 1024);
       this.scene.add(this.ribbons[key].mesh);
     }
     this.ribbons.path.mesh.renderOrder = 1;
+    this.ribbons.intentChevron.mesh.renderOrder = 2;   // over the path band
+    this.ribbons.intentStop.mesh.renderOrder = 2;
     this.ribbons.branch.mesh.renderOrder = 0;   // under the lines, over the ground
     this.ribbons.branchEdge.mesh.renderOrder = 1;
     this.ribbons.branchCenter.mesh.renderOrder = 1;
@@ -511,6 +525,8 @@ export class CarScene {
     this.mats.edge.color.set(t.edge);
     this.mats.model.color.set(t.model);
     this.mats.path.color.set(t.path);
+    this.mats.intentChevron.color.set(t.blue);
+    this.mats.intentStop.color.set(t.red);
     this.mats.slot.color.set(t.blue);
     for (const o of this.objects.values()) o.color = null;   // recolor on next frame
     for (const g of this.radarObjs.values()) g.color = null;
@@ -552,7 +568,9 @@ export class CarScene {
   setView(name, instant = false) {
     const v = (name === 'chase' && this.drumOn ? DRUM_CHASE : VIEWS[name]) || VIEWS.chase;
     this.view = name;
-    const to = new THREE.Spherical(v.r * (name === 'chase' ? this.chaseDolly : 1), v.phi, v.theta);
+    // in Reverse the following views look from the front (Reality View does the same), see _reverseFlip
+    const flip = this.reverseFlip && FOLLOW_VIEWS.has(name) ? Math.PI : 0;
+    const to = new THREE.Spherical(v.r * (DOLLY_VIEWS.has(name) ? this.chaseDolly : 1), v.phi, v.theta + flip);
     this._animate(this.target, to, { x: this.layoutX, y: v.offY }, instant, this.camLag);
   }
 
@@ -763,11 +781,14 @@ export class CarScene {
     this.ribbons.model.set(pieces.model, 0.08, 0.015);
     this.ribbons.modelEdge.set(pieces.modelEdge, 0.18, 0.015);
 
-    // planned path (openpilot) as a soft band while steering is engaged
+    // planned path (openpilot) as a soft band while it steers or controls the speed
     const path = op.modelV2 && op.modelV2.path;
-    if (s.showPath !== false && latActive && path && path.length > 1) {
-      this.ribbons.path.set([densify(path.map(([x, y]) => [x + modelXOffset(st), y]), 2).filter(p => p[0] > -2)], 1.9, 0.01);
+    const longActive = !!(op.carControl && op.carControl.longActive);
+    const carPath = path && path.length > 1 ? path.map(([x, y]) => [x + modelXOffset(st), y]) : null;
+    if (s.showPath !== false && (latActive || longActive) && carPath) {
+      this.ribbons.path.set([densify(carPath, 2).filter(p => p[0] > -2)], 1.9, 0.01);
     } else this.ribbons.path.set([], 0);
+    this._intent(carPath, latActive || longActive);
 
     // the roads leaving (or joining) the map's road: each arm as a strip between its filleted edges (the corners
     // the network's plain strips lack) and the fillets as lines; the arm's own lines are the network's
@@ -784,6 +805,24 @@ export class CarScene {
     const left = thr ? (thr.left.bsd && thr.left.bsd.v >= 1 && thr.left.bsd.v <= 3) : cs.leftBlindspot;
     const right = thr ? (thr.right.bsd && thr.right.bsd.v >= 1 && thr.right.bsd.v <= 3) : cs.rightBlindspot;
     this.bsdWarn = { left: { on: !!(left || cs.leftBlindspot), pts: this.egoLinePts.L1 }, right: { on: !!(right || cs.rightBlindspot), pts: this.egoLinePts.R1 } };
+  }
+
+  // ---- Reality View phase 1: planner intent (intent.js; Display -> Planner intent) ----------------
+  // The lane change openpilot is making as chevrons on its path, and a bar where its plan stops. The speed source
+  // label goes in the HUD's status line (hud.js), from the same module.
+  _intent(carPath, engaged) {
+    const st = this.state || {}, op = st.op || {};
+    const on = this.settings.showIntent !== false && engaged && carPath;
+    const lc = on ? laneChangeIntent(op.modelV2) : null;
+    if (lc) {
+      this.mats.intentChevron.opacity = 0.85 * lc.strength;
+      this.ribbons.intentChevron.set(chevrons(carPath, lc.dir, (this.clock * 0.8) % 1), 0.32, 0.02);
+    } else this.ribbons.intentChevron.set([], 0);
+    const v = this.vehicle ? this.vehicle.speed : 0;
+    const d = on ? stopPoint(op, v) : null;
+    const bar = d !== null ? barAcross(carPath, d) : null;
+    this.ribbons.intentStop.set(bar ? [bar] : [], 0.45, 0.025);
+    this.intentLabel = on ? speedSourceLabel(op) : null;
   }
 
   /** A line's pieces into the material by its marking type (2 dashed, 3 Botts dots, 4..7 double lines, else solid). */
@@ -1234,11 +1273,19 @@ export class CarScene {
       e.pivot.position.set(-e.wy, 0, -e.wx);   // world-group coordinates: X = -y, Z = -x
       e.pivot.rotation.y = e.h;
       const color = e.threat ? t.red : e.lead ? t.lead : t.object;
-      if (e.color !== color) {
-        for (const m of e.group.userData.paint) m.color.set(color);
+      // Reality View phase 1, provenance (provenance.js): measured now = solid; carried on from memory = a grey ghost
+      const prov = this.settings.showProvenance !== false && e.data
+        ? provenanceStyle(e.alpha, solidity(staleness(e.data, (now - e.lastSeen) * (rate || 1))))
+        : { alpha: e.alpha, desat: 0 };
+      const desat = Math.round(prov.desat * 10) / 10;   // recolor in tenths, not every frame
+      if (e.color !== color || e.desat !== desat) {
+        const c = (this._provColor || (this._provColor = new THREE.Color())).set(color);
+        if (desat > 0) { const g = c.r * 0.3 + c.g * 0.59 + c.b * 0.11; c.lerp(new THREE.Color(g, g, g), desat * 0.85); }
+        for (const m of e.group.userData.paint) m.color.copy(c);
         e.color = color;
+        e.desat = desat;
       }
-      for (const m of e.group.userData.paint) { m.opacity = e.alpha; m.transparent = e.alpha < 1; }
+      for (const m of e.group.userData.paint) { m.opacity = prov.alpha; m.transparent = prov.alpha < 1; }
     }
   }
 
@@ -1416,10 +1463,10 @@ export class CarScene {
     const dolly = 1 + CHASE_SPEED_DOLLY * Math.min(1, speed / DOLLY_FULL_SPEED);
     const prevDolly = this.chaseDolly;
     this.chaseDolly += (dolly - prevDolly) * (1 - Math.exp(-dt * 1.2));
-    if (this.view === 'chase' && !this.viewAnim && !this.interacting) {
+    if (DOLLY_VIEWS.has(this.view) && !this.viewAnim && !this.interacting) {
       const off = this.camera.position.clone().sub(this.controls.target).multiplyScalar(this.chaseDolly / prevDolly);
       this.camera.position.copy(this.controls.target).add(off);
-    } else if (this.viewAnim && this.view === 'chase') {
+    } else if (this.viewAnim && DOLLY_VIEWS.has(this.view)) {
       this.viewAnim.to.radius *= this.chaseDolly / prevDolly;
     }
     if (this.viewAnim) {
@@ -1517,11 +1564,47 @@ export class CarScene {
     g.matrixWorldNeedsUpdate = true;
   }
 
+  // ---- Reality View phase 1: Reverse flip and sun lighting --------------------------------------------
+  // In Reverse the following views swing round to look at the car from the front, toward where it's going, and back
+  // once out of Reverse; not while the user is moving the camera or the car controls frame the car.
+  _reverseFlip() {
+    const rev = !!(this.vehicle && this.vehicle.gear === 'reverse');
+    if (rev === !!this.reverseFlip) return;
+    if (this.studio || this.interacting) return;   // tried again next frame
+    this.reverseFlip = rev;
+    if (FOLLOW_VIEWS.has(this.view)) this.setView(this.view);
+  }
+
+  // The sun from the clock and the GPS fix (sun.js; Display -> Sun lighting): its height sets the light's strength and
+  // warmth, and with a heading, where it comes from. Without a fix, or off, the fixed studio rig.
+  _sunLight() {
+    const now = performance.now();
+    if (now - (this._sunAt || -1e9) < 5000) return;
+    this._sunAt = now;
+    const p = this.state && this.state.pose;
+    const on = this.settings.sunLight !== false && p && p.lat != null && p.lon != null;
+    if (!on) {
+      if (this.sunInfo) { this.sun.position.set(6, 14, 9); this.sun.intensity = 1.6; this.sun.color.set(0xffffff); this.hemi.intensity = 1.6; }
+      this.sunInfo = null;
+      return;
+    }
+    const pos = sunPosition(new Date(), p.lat, p.lon), L = sunLighting(pos.elevation);
+    this.sunInfo = pos;
+    this.sun.intensity = L.sun;
+    this.sun.color.set(L.color);
+    this.hemi.intensity = L.hemi;
+    // where it comes from needs the car's compass heading: the GPS-anchored pose frame is east/north
+    if (p.quality === 'gps' || p.quality === 'dr') this.sun.position.set(...sunDirection(pos.azimuth, L.lightElevation, p.h));
+    else this.sun.position.set(6, 14, 9);
+  }
+
   frame(dt, vehicle) {
     dt = Math.min(dt, 0.1);
     this.clock += dt;
     this.vehicle = vehicle;
     this._ground(dt);
+    this._reverseFlip();   // Reality View phase 1
+    this._sunLight();      // Reality View phase 1
     this._camera(dt);
     this._road(dt);
     // furniture and the nav arrow anchor to whichever road is drawn

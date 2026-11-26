@@ -15,6 +15,7 @@ import { VehicleState } from './vehicle.js';
 import { RoadCam } from './roadcam.js';
 import { Region } from './region.js';
 import { setCountry, currentCountry } from './regional.js';
+import { sunPosition, isNight } from './sun.js';   // Reality View phase 1
 
 const SETTINGS_VERSION = 5;
 const AUTO_VIEW_HOLD_MS = 10000;   // a parking maneuver starting this soon after the user picked a view keeps it
@@ -31,6 +32,8 @@ const DEFAULTS = {
   showFps: true, renderScale: 'auto', showMusic: true, showNav: true, demoInfotainment: false, demoCarState: false, carDemo: false,
   calibration: true, mapPrefetchKm: 25, mapSource: 'auto', osKey: '', osCap: 5000, positionSource: 'car', roadcam: 'mirror', groundStyle: 'perforated',
   layout: 'auto', drum: false, driverSide: 'auto',
+  // Reality View phase 1
+  showIntent: true, showProvenance: true, sunLight: true, sunTheme: true,
 };
 
 function loadSettings() {
@@ -155,7 +158,7 @@ class App {
   setSetting(key, value) {
     this.settings[key] = value;
     save('settings', this.settings);
-    if (key === 'theme') this.applyTheme();
+    if (key === 'theme' || key === 'sunTheme') this.applyTheme();
     if (key === 'egoPaint' || key === 'egoWheels') this.scene.setEgoLook(this.settings.egoPaint, this.settings.egoWheels);
     if (key === 'showRadar') this.updateRadarChip();
     if (key === 'showFps' || key === 'renderScale') this.meter.apply();
@@ -188,12 +191,25 @@ class App {
 
   applyTheme() {
     const t = this.settings.theme;
-    const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+    // Auto: night after sunset where the car is (sun.js, Display -> Theme), else the system's dark mode
+    const bySun = this.settings.sunTheme !== false && this.sunNight != null;
+    const dark = t === 'dark' || (t === 'auto' && (bySun ? this.sunNight : matchMedia('(prefers-color-scheme: dark)').matches));
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     $('meta[name=theme-color]').setAttribute('content', dark ? '#101216' : '#eceef1');
     this.scene.setTheme(dark);
     // the Android app starts in this theme next time (its loading screen and background), see MainActivity
     try { window.WebHudApp?.setTheme(t); } catch { /* not in the app */ }
+  }
+
+  // Reality View phase 1: the Auto theme follows the sun where the car is (sun.js), checked once a minute
+  followSun(state) {
+    const p = state && state.pose, now = performance.now();
+    if (!p || p.lat == null || p.lon == null || now - (this.sunCheckedAt || -1e9) < 60000) return;
+    this.sunCheckedAt = now;
+    const night = isNight(sunPosition(new Date(), p.lat, p.lon).elevation, !!this.sunNight);
+    if (night === this.sunNight) return;
+    this.sunNight = night;
+    if (this.settings.theme === 'auto' && this.settings.sunTheme !== false) this.applyTheme();
   }
 
   // ---- position source ------------------------------------------------------------------------------
@@ -438,6 +454,7 @@ class App {
   draw(state) {
     this.state = state;
     if (state && state.pose) this.region.update(state.pose.lat, state.pose.lon, performance.now() / 1000);
+    this.followSun(state);   // Reality View phase 1
     this.lastStateAt = performance.now();
     if (!this.car.apa) this.scene.update(state, this.settings);
     this.updateRadarChip();
