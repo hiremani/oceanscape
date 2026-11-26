@@ -674,6 +674,35 @@ export class Settings {
       ['showUss', 'Parking sensors', 'Ultrasonic zone arcs around the car at low speed.'],
       ['showProvenance', 'Show what\'s remembered', 'World model: an object a sensor is measuring now is solid; one nothing has measured for a moment, kept from memory, fades to a grey ghost within a second, so a car that has gone never stays solid on the road.'],
     ]));
+    body.append(this.npuSection());   // NPU detector (npu.js)
+  }
+
+  // ---- NPU detector (npu.js, Reality View phase 3) ----
+  npuSection() {
+    const s = this.app.settings, npu = this.app.npu;
+    const on = s.npu === true;
+    if (npu && !npu.status && this.app.commaConnected) npu.refreshStatus().then(() => { if (this.tab === 'display' && this.displaySection === 'objects') this.show('display', true); });
+    const rows = [el('div.row', el('div.lbl', el('b', 'NPU detector'),
+      el('small', 'A detector on this screen\'s NPU looks at the comma\'s road camera and adds what the radar and the ADAS list miss: ' +
+        'pedestrians, cyclists and motorcycles, a truck told from a car, and the signals and stop signs across a junction. It also ' +
+        'hides the radar\'s "stopped cars" under gantries and bridges when it can see there is no vehicle. Off by default until it has been measured on this screen.')),
+      this.app.switch(on, v => { this.app.setSetting('npu', v); this.show('display', true); }))];
+    if (on) {
+      rows.push(el('div.row', el('div.lbl', el('b', 'Camera'), el('small', 'Road: farther, narrower. Wide: nearer, across the junction.')),
+        this.app.segmented([['road', 'Road'], ['wide', 'Wide']], s.npuCamera === 'wide' ? 'wide' : 'road', v => this.app.setSetting('npuCamera', v))));
+    }
+    const st = npu && npu.status, live = npu && npu.stats;
+    const fmt = (ms) => ms ? ['decode', 'pre', 'npu', 'post'].filter(k => ms[k] != null).map(k => `${k} ${Number(ms[k]).toFixed(1)}`).join(' · ') + (ms.total != null ? ` = ${Number(ms.total).toFixed(1)} ms` : '') : '';
+    const lines = [];
+    if (!this.app.commaConnected) lines.push('The comma isn\'t connected.');
+    else if (!st) lines.push('Asking the app...');
+    else {
+      lines.push(st.available ? `Available: ${st.model || 'model'}${st.runtime ? ` on ${st.runtime}` : ''}` : `Not available: ${st.reason || 'unknown'}`);
+      if (st.running || (live && live.running)) lines.push(`Running: ${Math.round((live && live.fps) || st.fps || 0)} fps${fmt((live && live.ms) || st.ms) ? ` · ${fmt((live && live.ms) || st.ms)}` : ''}`);
+    }
+    if (on && live && live.running) lines.push(`Last frame ${live.ageMs} ms old · ${live.dets} boxes, ${live.objects} placed, ${live.signs} signals · calibration from ${live.calib}`);
+    rows.push(el('div.row', el('div.lbl', el('b', 'Status'), ...lines.map(t => el('small', t)))));
+    return el('div.section', el('h3', 'NPU detector'), el('div.rows', rows));
   }
 
   displayDebug() {

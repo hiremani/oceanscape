@@ -18,6 +18,13 @@
 //          when it's the only object source there is. leadTwo is the model's lead 2 s from now
 //          (modelV2.leadsV3[1]), most often the same car as leadOne, so it only counts when it's
 //          clearly another car.
+//   cam    the Pulse NPU detector (npu.js, npu_geom.js): boxes in the comma's road camera, placed on the road.
+//          Its classes are the best here (it tells a truck from a car, and sees pedestrians, cyclists and
+//          motorcycles the others miss), so it sets an object's class; its ranges come from the road plane and
+//          the class's usual height, coarse far out. It starts objects of its own only for road users the radar
+//          and the ADAS list don't track well (people, bicycles, motorcycles), or when neither is reporting. And
+//          it settles the radar's overhead structures: a standing radar track in our path that the detector,
+//          looking, never finds a vehicle at is a gantry or a bridge (CAM_VETO_*), and is hidden.
 // Each object is a physically constrained extended Kalman filter (physics.js PhysFilter): a kinematic bicycle
 // over its footprint's center, heading, speed, acceleration and path curvature, held to what its class and mass
 // can do, so it can't spin in place, slide sideways or accelerate harder than it could, and kept from
@@ -104,6 +111,24 @@ const MOVING_SPEED = 1.5;          // m/s over ground, plus movingFrac (calibrat
 const MOVING_FRAC = 0.06;          // the Doppler and ego speed scales may be (4% uncorrected, so a standing object can read ~1 m/s)
 const CONF_RISE_S = 0.5;           // confidence eases toward its target over about this long, in data time...
 const CONF_FALL_S = 0.25;
+// the NPU detector (cam)
+const CAM_SPAWN = new Set(['pedestrian', 'bicycle', 'motorcycle']);   // what it may start an object for on its own
+const CAM_RAN_S = 0.5;             // it counts as looking while it reported a frame this recently
+const CAM_HOLD_S = 1.0;            // a track it detected this recently is one it sees
+const CAM_VETO_X = [10.0, 60.0];   // m ahead: where it reliably sees a vehicle standing in our path
+// a box may refine the class of an object the radar or the ADAS list already tracks at any score the app sends (0.35
+// and up); to start an object of its own it must score CAM_SPAWN_SCORE in CAM_SPAWN_FRAMES frames in a row at about
+// the same place (the converted YOLOX-s scored a true car 0.73 and lane paint 0.44 on the car's own night frames)
+const CAM_SPAWN_SCORE = 0.5;
+const CAM_SPAWN_FRAMES = 3;
+const CAM_CAND_M = 2.5;            // m: a candidate's next box within this is the same thing
+const CAM_CAND_S = 0.4;            // s: a candidate not seen again this soon is forgotten
+// a box's range is coarse: on an object the radar measures, it moves the estimate across the line of sight only
+// (its range noise is taken CAM_RANGE_DEFER times larger)
+const CAM_RANGE_DEFER = 10.0;
+const CAM_RADAR_FRESH_S = 0.5;     // ...while the radar has reported the object this recently
+const CAM_ALONE_S = 1.0;           // it starts vehicles only after running this long with no radar or ADAS at all
+const CAM_VETO_S = 0.6;            // looking and not finding it this long (about 9 frames at 15 fps): an overhead structure
 const CONF_COAST_S = 0.3;          // ...but can't rise once no source has reported the object for this long, and a moving one fades out
 
 
@@ -288,8 +313,10 @@ export class Meas {
   }
 }
 
-const SOURCE_RANK = { adas: 0, radar: 1, op: 2 };   // whose class / size / heading wins
-const RANK_SRC = { 0: 'adas', 1: 'radar', 2: 'op' };
+const SOURCE_RANK = { cam: -1, adas: 0, radar: 1, op: 2 };   // whose class / heading wins (the NPU detector's class first)
+const RANK_SRC = { '-1': 'cam', 0: 'adas', 1: 'radar', 2: 'op' };
+// whose size wins: the ADAS list measures it; the detector only knows its class's usual size, which beats a radar strip
+const DIMS_RANK = { adas: 0, cam: 0.5, radar: 1, op: 2 };
 
 // how sure a source's heading is (rad, 1 sigma); only used while an object is slow, where its motion can't tell
 const HEADING_SIGMA = { adas: 0.35, radar: 0.25, op: 0.6 };
@@ -301,7 +328,7 @@ const EGO_W = 1.98, EGO_L = 4.775; // m: our footprint (the rear axle 0.925 m fr
 /** A measured class as the physical model knows it. */
 const physClass = (cls, rank = 0) => {
   if (!cls || limitsOf(cls) === limitsOf('unknown')) return 'unknown';
-  return limitsOf(cls).walks && rank !== SOURCE_RANK.adas ? 'unknown' : cls;
+  return limitsOf(cls).walks && rank > SOURCE_RANK.adas ? 'unknown' : cls;   // a walker on a camera's word only
 };
 
 class Track {
@@ -331,12 +358,17 @@ class Track {
     this.cls = null;
     this.clsRank = 99;
     this.dims = null;
+    this.dimsRank = 99;
+    this.dimsCls = null;   // the class its size was given for
     this.headingRank = 99;
     this.visionT = null;   // last time a camera positively classified it
     this.thin = 0.0;       // widest-for-its-length the radar has drawn it (w/l)
     this.radarAge = 0;     // oldest radar track (cycles) that has reported it
     this.radarClsN = 0;    // radar cycles that gave it a class (not just a point target)
     this.unseenS = 0.0;    // how long openpilot's model has missed it in plain view
+    this.camT = null;      // last time the NPU detector found it
+    this.camMissS = 0.0;   // how long the NPU detector, looking, has missed it standing in our path
+    this.overhead = false; // ...long enough: an overhead structure, not a road user
     this.conf = 0.0;
     this.confT = t;
     this.confWhy = '';
@@ -427,7 +459,7 @@ function older(A, B) {
 function sameSourceId(a, b) {
   for (const src in a.sources) {
     const s = a.sources[src], o = b.sources[src];
-    if (src !== 'op' && o !== undefined && o.id === s.id && Math.abs(o.t - s.t) < SAME_ID_S) return true;
+    if (src !== 'op' && src !== 'cam' && o !== undefined && o.id === s.id && Math.abs(o.t - s.t) < SAME_ID_S) return true;
   }
   return false;
 }
@@ -456,6 +488,10 @@ export class WorldModel {
     this.sticky = new Map();   // "src:sid" -> track id
     this.srcSeen = {};         // src -> time of its latest measurement
     this.modelSeen = -1e9;     // time of openpilot's latest model output, leads or not
+    this.camSeen = -1e9;       // time of the NPU detector's latest frame, objects or not
+    this.camFirst = null;      // ...and of its first
+    this.camCands = [];        // boxes not (yet) an object: {cls, z (world), t, n frames in a row}
+    this.camFrames = [];       // the detector's recent frame times (camRan)
     this.lastNow = null;
   }
 
@@ -464,13 +500,22 @@ export class WorldModel {
   /** openpilot's model looked at t. Where it reported no lead, it saw no car. */
   modelRan(t) { this.modelSeen = Math.max(this.modelSeen, t); }
 
+  /** The NPU detector looked at t (a frame inferred). Where it found no vehicle, it saw none. */
+  camRan(t) {
+    this.camSeen = Math.max(this.camSeen, t);
+    this.camFrames.push(t);   // every frame's time, so a candidate missed in one is no longer "in a row"
+    if (this.camFrames.length > 64) this.camFrames.splice(0, this.camFrames.length - 64);
+  }
+
   /** Fuse everything measured up to FUSION_DELAY_S ago; return the objects as of `now`. */
   step(now) {
     // waiting for late sources only makes sense while time moves; paused (a replay), take everything
     const paused = this.lastNow !== null && now <= this.lastNow;
     const cutoff = paused ? now : now - FUSION_DELAY_S;
     this.lastNow = now;
-    const ready = this.pending.filter(m => m.t <= cutoff).sort((a, b) => a.t - b.t || (a.src < b.src ? -1 : a.src > b.src ? 1 : 0));
+    // at one time, the NPU detector last: it starts objects only where the others have none
+    const ready = this.pending.filter(m => m.t <= cutoff).sort((a, b) => a.t - b.t || (a.src === 'cam') - (b.src === 'cam') ||
+      (a.src < b.src ? -1 : a.src > b.src ? 1 : 0));
     this.pending = this.pending.filter(m => m.t > cutoff && m.t > now - HISTORY_S);
     let i = 0;
     while (i < ready.length) {   // one batch = one source's report at one time
@@ -495,6 +540,10 @@ export class WorldModel {
     const batch = [...byId.values()];
     const t = batch[0].t;
     this.srcSeen[batch[0].src] = t;
+    if (batch[0].src === 'cam') {
+      if (this.camFirst === null) this.camFirst = t;
+      this.camCands = this.camCands.filter(c => t - c.t <= CAM_CAND_S && c.t <= t);
+    }
     const pose = this.odo.pose(t);
     const R = rot(pose[2]), Rt = transpose(R);
     const o = toWorld(pose, 0, 0);   // where the sensors look from: our front bumper
@@ -510,7 +559,10 @@ export class WorldModel {
         const svy = m.vy !== null ? m.svy : 10.0;
         Rv = matmul(matmul(R, [[k2 * m.svx ** 2, 0], [0, k2 * svy ** 2]]), Rt);
       }
-      meas.push([m, z, Rg, Rg.map(row => row.map(x => k2 * x)), v, Rv]);
+      const entry = [m, z, Rg, Rg.map(row => row.map(x => k2 * x)), v, Rv];
+      // a box's update on an object the radar is ranging: its range all but ignored, its bearing kept
+      if (m.src === 'cam') entry.push(matmul(matmul(R, [[k2 * (CAM_RANGE_DEFER * m.sx) ** 2, 0], [0, k2 * m.sy ** 2]]), Rt));
+      meas.push(entry);
     }
     for (const tr of this.tracks.values()) tr.predict(t);
 
@@ -549,12 +601,19 @@ export class WorldModel {
     // mustn't go to the next nearest (a long truck beside it, whose center its point reached)
     const op0 = meas.find(([m]) => m.src === 'op' && m.sid === 0);
     const sameLead = ([m]) => m.src === 'op' && m.sid === 1 && op0 && hypot(m.x - op0[0].x, m.y - op0[0].y) < OP_SAME_LEAD_M;
-    meas.forEach(([m, z, , Rp, v, Rv], k) => {
+    meas.forEach(([m, z, , Rp0, v, Rv, RpDefer], k) => {
       let tid = assigned.get(k);
+      let Rp = Rp0;
       let innovation;
       if (sameLead(meas[k]) && tid !== this.sticky.get(`op:0`)) return;
       if (tid === undefined) {
         if (m.src === 'op' && (m.info.modelProb ?? 1.0) < OP_MIN_PROB) return;
+        // the detector starts only people, bicycles and motorcycles; vehicles it leaves to the radar and the ADAS list
+        // (a box's range is coarse far out), unless neither is reporting at all
+        // (the camera must have run a while first: at start-up its first frame can beat the radar's first cycle)
+        if (m.src === 'cam' && !CAM_SPAWN.has(m.cls) && !(t - this.camFirst >= CAM_ALONE_S &&
+            ['radar', 'adas'].every(src => t - (this.srcSeen[src] ?? -1e9) > SOURCE_GONE_S))) return;
+        if (m.src === 'cam' && !this._camCandidate(m, z, t)) return;
         tid = this.nextId++;
         // which way it faces: as it moves (a measured velocity), else as a source says, else (most of what's around us)
         // as we do, though
@@ -577,14 +636,33 @@ export class WorldModel {
         innovation = [0, 0];
       } else {
         const tr = this.tracks.get(tid);
+        if (m.src === 'cam' && RpDefer && t - (tr.last.radar ?? -1e9) < CAM_RADAR_FRESH_S) Rp = RpDefer;
         const c = tr.centerFor(z, o);
         innovation = [c[0] - tr.pos[0], c[1] - tr.pos[1]];
         tr.update(z, o, Rp, v, Rv, t);
       }
       const tr = this.tracks.get(tid);
       this._annotate(tr, m, matvec(Rt, innovation), pose[2]);
-      this.sticky.set(`${m.src}:${m.sid}`, tid);
+      if (m.src !== 'cam') this.sticky.set(`${m.src}:${m.sid}`, tid);   // the detector's boxes have no identity
     });
+  }
+
+  /** Whether an unmatched box may start an object now: it scores CAM_SPAWN_SCORE and has been seen in
+   *  CAM_SPAWN_FRAMES frames in a row (each within CAM_CAND_M of the last, CAM_CAND_S apart at most). */
+  _camCandidate(m, z, t) {
+    if ((m.info.score ?? 0) < CAM_SPAWN_SCORE) return false;
+    const c = this.camCands.find(c => c.cls === m.cls && c.t < t && hypot(z[0] - c.z[0], z[1] - c.z[1]) < CAM_CAND_M);
+    if (!c) {
+      if (CAM_SPAWN_FRAMES <= 1) return true;
+      this.camCands.push({ cls: m.cls, z, t, n: 1 });
+      return false;
+    }
+    // a frame between the two without it breaks the run
+    const missed = this.camFrames.some(f => f > c.t + 1e-6 && f < t - 1e-6);
+    c.n = missed ? 1 : c.n + 1; c.z = z; c.t = t;
+    if (c.n < CAM_SPAWN_FRAMES) return false;
+    this.camCands.splice(this.camCands.indexOf(c), 1);
+    return true;
   }
 
   _annotate(tr, m, resid, h) {
@@ -597,8 +675,14 @@ export class WorldModel {
     } else if (tr.cls === null) {
       tr.cls = m.src === 'op' ? 'car' : m.cls;
     }
-    if (m.dims && rank <= tr.clsRank) tr.dims = m.dims;
-    if ((m.src === 'adas' && VISION_CLASSES.has(m.cls)) || (m.src === 'op' && (m.info.modelProb ?? 0.0) >= OP_MIN_PROB)) tr.visionT = m.t;
+    // its size: the best source's, or the detector's usual size when its class has changed what it is (a truck the
+    // ADAS list sized as a car)
+    const dRank = DIMS_RANK[m.src] ?? 9;
+    if (m.dims && (dRank <= tr.dimsRank || (m.src === 'cam' && tr.dimsCls !== tr.cls && m.cls === tr.cls))) {
+      tr.dims = m.dims; tr.dimsRank = dRank; tr.dimsCls = m.cls || tr.cls;
+    }
+    if ((m.src === 'adas' && VISION_CLASSES.has(m.cls)) || (m.src === 'op' && (m.info.modelProb ?? 0.0) >= OP_MIN_PROB) || m.src === 'cam') tr.visionT = m.t;
+    if (m.src === 'cam') { tr.camT = m.t; tr.camMissS = 0; tr.overhead = false; }
     if (m.src === 'radar') {
       tr.radarAge = Math.max(tr.radarAge, m.info.cycles);
       tr.radarClsN += m.cls !== null ? 1 : 0;
@@ -673,7 +757,9 @@ export class WorldModel {
         keep.n += drop.n;
         if (drop.clsRank < keep.clsRank) {
           keep.cls = drop.cls; keep.clsRank = drop.clsRank; keep.dims = drop.dims || keep.dims;
+          keep.dimsRank = Math.min(keep.dimsRank, drop.dimsRank); keep.dimsCls = drop.dimsCls || keep.dimsCls;
         }
+        if (drop.camT !== null && (keep.camT === null || drop.camT > keep.camT)) { keep.camT = drop.camT; keep.camMissS = 0; keep.overhead = false; }
         if (drop.headingRank < keep.headingRank) keep.headingRank = drop.headingRank;
         keep.f.cls = physClass(keep.cls, keep.clsRank);
         keep.f.dims = keep.dims;
@@ -729,6 +815,7 @@ export class WorldModel {
     const v = this.odo.speed(t);
     const kappa = v > 1.0 ? this.odo.w / v : 0.0;
     const looking = v > UNSEEN_MIN_V && t - this.modelSeen < 1.0;
+    const camLooking = t - this.camSeen < CAM_RAN_S;
     const moving = MOVING_SPEED + this.calib.movingFrac * Math.abs(v);
     const seen = new Map(), ahead = new Map(), classified = new Map(), solid = new Map();
     for (const [tid, tr] of this.tracks) seen.set(tid, tr.visionT !== null || 'adas' in tr.last);   // a camera has it
@@ -752,6 +839,14 @@ export class WorldModel {
       // sideways velocity can read as walking; an object counts as moving once that can't explain it)
       const standing = Math.max(0, tr.speed() - 1.5 * Math.sqrt(tr.f.P[3][3])) <= moving;
       if (dt > 0 && standing && looking && ahead.has(tid) && ahead.get(tid) < blocker + 2.0 && !seen.get(tid) && tr.cls !== 'pedestrian') tr.unseenS += dt;
+      // the NPU detector looking straight at a standing radar track in our path, and finding no vehicle there: an
+      // overhead structure (a gantry, a bridge, a light), unless another camera vouches for it
+      if (dt > 0 && camLooking && standing && ahead.has(tid) && ahead.get(tid) >= CAM_VETO_X[0] && ahead.get(tid) <= CAM_VETO_X[1] &&
+          ahead.get(tid) < blocker + 2.0 && 'radar' in tr.last && tr.cls !== 'pedestrian' &&
+          (tr.camT === null || t - tr.camT > CAM_HOLD_S) && (tr.visionT === null || t - tr.visionT > VISION_HOLD_S)) {
+        tr.camMissS += dt;
+        if (tr.camMissS >= CAM_VETO_S) tr.overhead = true;
+      }
       let target, why;
       if (tr.visionT !== null) {
         [target, why] = t - tr.visionT < VISION_HOLD_S ? [CONF_VISION, 'vision'] : [CONF_VISION_HELD, 'vision earlier'];
@@ -766,6 +861,7 @@ export class WorldModel {
         if (tr.thin >= THIN_ASPECT) [target, why] = [target * THIN_FACTOR, 'thin'];
         if (tr.unseenS >= UNSEEN_HOLD_S) [target, why] = [Math.min(target, CONF_UNSEEN), 'unseen'];
       }
+      if (tr.overhead) [target, why] = [0.0, 'overhead'];
       if (t - tr.lastT > CONF_COAST_S) {
         // nothing reports it any more. A standing object stays put on the ground, so it waits out a gap (a parked
         // car the radar loses in a turn) without rising; a moving one would carry on along a velocity that's now
@@ -831,7 +927,7 @@ export class WorldModel {
         age: pyRound(now - tr.first, 1),
         stale: pyRound(Math.max(0.0, now - FUSION_DELAY_S - tr.lastT), 2),
         stationary: speed < STATIONARY_SPEED,
-        conf: pyRound(tr.conf, 2), confWhy: tr.confWhy,
+        conf: pyRound(tr.conf, 2), confWhy: tr.confWhy, overhead: tr.overhead,
         sources,
       });
     }
@@ -897,3 +993,20 @@ export function opMeasurements(t, rs, vEgo, calib = NO_CALIBRATION) {
   });
   return out;
 }
+
+let camSeq = 0;
+/** One NPU detector frame's road users, placed by npu_geom.js liftBox (car frame at t, the frame's capture time):
+ *  [{cls, k, x, y, sx, sy, conf, score, dims, cut}]. No velocity; the boxes carry no identity. */
+export function cameraMeasurements(t, dets) {
+  const seq = camSeq++;
+  const out = [];
+  (dets || []).forEach((d, i) => {
+    if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y) || !d.cls) return;
+    out.push(new Meas('cam', `${seq}:${i}`, t, d.x, d.y, Math.max(0.2, d.sx || 1), Math.max(0.15, d.sy || 0.5), {
+      cls: d.cls, dims: Array.isArray(d.dims) ? d.dims : null, weight: Math.min(1, Math.max(0.3, d.conf ?? 0.5)),
+      info: { k: d.k ?? null, score: d.score ?? null, cut: !!d.cut },
+    }));
+  });
+  return out;
+}
+

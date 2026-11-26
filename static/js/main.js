@@ -15,6 +15,8 @@ import { Settings } from './settings.js';
 import { VehicleState } from './vehicle.js';
 import { RoadCam } from './roadcam.js';
 import { VideoGround } from './videoground.js';   // camera on road (Phase 2)
+import { NpuDetector } from './npu.js';   // NPU detector (Phase 3)
+import { NpuSigns } from './npu_signs.js';
 import { Region } from './region.js';
 import { setCountry, currentCountry } from './regional.js';
 import { sunPosition, isNight } from './sun.js';   // Reality View phase 1
@@ -38,6 +40,7 @@ const DEFAULTS = {
   showIntent: true, showProvenance: true, sunLight: true, sunTheme: true,
   measure: true,   // drive measurements (measure.js)
   camOnRoad: false, camOnRoadStrength: 0.85, camOnRoadSource: 'road', camOnRoadMemory: true,   // videoground.js
+  npu: false, npuCamera: 'road',   // NPU detector (npu.js): off until measured on the Pulse
 };
 
 function loadSettings() {
@@ -99,6 +102,9 @@ class App {
     this.roadcam = new RoadCam(this);   // the comma's camera with its overlay, in a window over the 3D view
     // camera on road: the comma's camera pixels on the 3D view's ground (videoground.js; Display -> Road)
     this.videoGround = this.scene.videoGround = new VideoGround(this.scene, this);
+    // ---- NPU detector (npu.js, Phase 3) ----
+    this.npu = this.scene.npu = new NpuDetector(this);
+    this.scene.npuSigns = new NpuSigns(this.scene.world);
     this.applyTheme();
     this.scene.setEgoLook(this.settings.egoPaint, this.settings.egoWheels);
     this.setView(this.settings.view, true);

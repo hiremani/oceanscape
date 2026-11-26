@@ -16,7 +16,7 @@ export function wireFrames(frames) {
   return frames.map(([addr, src, hex]) => [addr, hexToBytes(hex), src]);
 }
 import { FiskerWorld, OBJECT_MSGS } from './fisker_world.js';
-import { MEASURED_CALIBRATION, NO_CALIBRATION, OP_LATENCY_S, WorldModel, adasMeasurement, calibrationToJson, opMeasurements, radarMeasurements } from './world_model.js';
+import { MEASURED_CALIBRATION, NO_CALIBRATION, OP_LATENCY_S, WorldModel, adasMeasurement, calibrationToJson, cameraMeasurements, opMeasurements, radarMeasurements } from './world_model.js';
 
 const SERVICE_STALE_S = 2.0;
 const ODOMETRY_CAN_S = 0.5;   // carState stands in for the CAN odometry once that's older than this
@@ -202,6 +202,14 @@ export class StateBuilder {
     } else if (GPS_SERVICES.has(which) && t - this._gpsCanT > GPS_CAN_S && data.fix && data.lat != null) {
       this.pose.gps(t, data.lat, data.lon, { accuracy: data.acc ?? null, speed: data.speed ?? null, bearing: data.bearing ?? null });
     }
+  }
+
+  /** One NPU detector frame (npu.js): its road users placed in the car frame at t (this builder's clock), when the
+   *  frame was taken. Fed straight to the world model, which places each by the pose at t. */
+  feedCamera(dets, t) {
+    if (!Number.isFinite(t)) return;
+    this.model.add(cameraMeasurements(t, dets));
+    this.model.camRan(t);
   }
 
   setBrand(brand) { this.brand = brand || null; }
