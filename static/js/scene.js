@@ -1634,6 +1634,7 @@ export class CarScene {
     DRUM.value.x = this.drumK < 1e-4 / DRUM_R ? 0 : this.drumK;
     // camera on road (videoground.js): its road memory pass renders before the view does
     if (this.videoGround) this.videoGround.update(dt);
+    if (this.npuSigns) this.npuSigns.update(this.npu, this.pose, this.settings.npu === true);   // NPU detector's signals (npu_signs.js)
     this.renderer.render(this.scene, this.camera);
     this._labels();   // after render: the camera's matrices are this frame's
   }

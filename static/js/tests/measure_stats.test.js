@@ -166,3 +166,15 @@ test('samples without feature info count as everything off (older samples, featu
   assert.equal(s.buildingTris, undefined);
   assert.equal(s.camRoad, undefined);
 });
+
+test('the NPU detector is split out too, with its own rate, inference time and frame age', () => {
+  const d = new DriveStats(0);
+  for (let i = 0; i < 10; i++) d.add(sample(i, 50, { features: { npu: false } }));
+  for (let i = 10; i < 20; i++) d.add(sample(i, 40, { features: { npu: true }, npu: { fps: 15, totalMs: 42, ageMs: 160 } }));
+  const s = d.summary();
+  assert.equal(s.byFeature.npu.on.samples, 10);
+  assert.equal(s.byFeature.npu.off.samples, 10);
+  assert.ok(s.npu.fps.p50 >= 14.5 && s.npu.fps.p50 <= 15.5, JSON.stringify(s.npu.fps));
+  assert.ok(s.npu.totalMs.p50 >= 41 && s.npu.totalMs.p50 <= 43);
+  assert.ok(s.npu.ageMs.p50 >= 155 && s.npu.ageMs.p50 <= 165);
+});

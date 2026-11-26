@@ -58,8 +58,9 @@ function round(v, d = 1) {
   return Math.round(v * k) / k;
 }
 
-// the Reality View features split out in byFeature: buildings drawing (buildings.js), camera on the road (videoground.js)
-export const FEATURES = ['buildings', 'camRoad'];
+// the Reality View features split out in byFeature: buildings drawing (buildings.js), camera on the road (videoground.js),
+// the NPU detector running (npu.js)
+export const FEATURES = ['buildings', 'camRoad', 'npu'];
 
 export function objectBucket(n) {
   const v = Number.isFinite(n) ? n : 0;
@@ -105,6 +106,7 @@ class Span {
     this.byFeature = Object.fromEntries(FEATURES.map(k => [k, { on: new FrameGroup(), off: new FrameGroup() }]));
     this.buildingTris = new Hist(4e6, 5000);
     this.camRoad = { uploadMs: new Hist(100, 0.05), ageMs: new Hist(2000, 5) };
+    this.npu = { fps: new Hist(60, 0.5), totalMs: new Hist(500, 0.5), ageMs: new Hist(2000, 5) };
     this.work = new Hist(1000, 0.25);     // the HUD's own script time per frame (ms)
     this.worst = new Hist(1000, 1);       // the slowest frame of each second (ms)
     this.calls = new Hist(4000, 1, true);
@@ -135,6 +137,12 @@ class Span {
     if (f.camRoad && r) {
       if (r.uploadMs != null) this.camRoad.uploadMs.add(r.uploadMs);
       if (r.ageMs != null) this.camRoad.ageMs.add(r.ageMs);
+    }
+    const n = s.npu;
+    if (f.npu && n) {
+      if (n.fps != null) this.npu.fps.add(n.fps);
+      if (n.totalMs != null) this.npu.totalMs.add(n.totalMs);
+      if (n.ageMs != null) this.npu.ageMs.add(n.ageMs);
     }
     const c = s.cam;
     if (c) {
@@ -178,6 +186,9 @@ class Span {
     if (this.camRoad.uploadMs.n || this.camRoad.ageMs.n) {
       out.camRoad = { uploadMs: this.camRoad.uploadMs.summary(), ageMs: this.camRoad.ageMs.summary() };
     }
+    if (this.npu.fps.n) {
+      out.npu = { fps: this.npu.fps.summary(), totalMs: this.npu.totalMs.n ? this.npu.totalMs.summary() : null, ageMs: this.npu.ageMs.summary() };
+    }
     if (detail) {
       out.byObjects = {};
       for (const [key, g] of Object.entries(this.byObjects)) {
@@ -192,7 +203,8 @@ class Span {
 /**
  * One drive's measurements. add() about once a second with a sample:
  *   {t (s), fps, median (ms, or null in a second too slow for it), worst (ms), work (ms), calls, tris, scale, speed (m/s),
- *    objects, heapMB?, features?: {buildings, camRoad} (drawing now), buildingTris?, camRoad?: {uploadMs, ageMs},
+ *    objects, heapMB?, features?: {buildings, camRoad, npu} (drawing / running now), buildingTris?, camRoad?: {uploadMs, ageMs},
+ *    npu?: {fps, totalMs, ageMs},
  *    cam?: {rx, decoded, shown, lost, skipped (frames in the second), queue, decodeMs, lagMs}}
  * A sample after a gap counts for at most MAX_DT seconds, so a sleeping screen doesn't count as slow time.
  */

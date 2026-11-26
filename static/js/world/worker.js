@@ -15,6 +15,8 @@
 //                                                    buses) or 'adas' (the comma's ADAS bus); [] for none
 //               {type:'calibration', on}             the world model's measured sensor calibration on/off
 //               {type:'position', source}            where the pose's fixes come from: 'car' (the TBOX) or 'device' (below)
+//               {type:'npu', ageS, dets}             an NPU detector frame (npu.js): road users in the car frame when it was
+//                                                    taken, ageS before now ([{cls, x, y, sx, sy, conf, ...}], npu_geom.js)
 //               {type:'location', t, fix}            a fix from the screen's own location, through the Android app
 //                                                    ({lat, lon, acc, speed, bearing, fixT}, fixT and t on the Date.now()/1000 clock)
 // Messages out: {type:'state', data}                 the comma's own snapshot (replay, or no car buses)
@@ -105,6 +107,8 @@ let rawNext = 0;
 let calibrationOn = true;
 let positionSource = 'car';
 let early = [];
+let tickWall = null;         // when the comma builder's last tick came in (wall clock, s)...
+let tickNow = null;          // ...and the time it was for (the builder's data clock; what its snapshot is taken at)
 
 self.onmessage = (ev) => {
   const msg = ev.data;
@@ -155,6 +159,14 @@ self.onmessage = (ev) => {
       positionSource = msg.source === 'device' ? 'device' : 'car';
       if (builder) builder.setPositionSource(positionSource);
       if (local) local.setPositionSource(positionSource);
+    } else if (msg.type === 'npu') {
+      // each builder on its own clock: the car's view runs on the wall clock; the comma's on its data clock, which was
+      // builder.t when its last tick came in
+      const wall = Date.now() / 1000, age = Math.max(0, Number(msg.ageS) || 0);
+      if (local && wall - localT <= LOCAL_QUIET_S) local.feedCamera(msg.dets || [], wall - age);
+      // (never later than the tick's own time: the world model steps to that, and a paused replay's odometry would carry
+      // the car on past its last sample)
+      if (builder && tickWall !== null && tickNow !== null) builder.feedCamera(msg.dets || [], Math.min(tickNow, tickNow + (wall - tickWall) - age));
     } else if (msg.type === 'location') {
       if (local) local.feedLocation(msg.fix, msg.t);   // the car's own view only: the comma's replays have fixes of their own
     } else if (msg.type === 'osRoads') {
@@ -173,6 +185,8 @@ self.onmessage = (ev) => {
 
 function onTick(tick) {
   const wall = Date.now() / 1000;
+  tickWall = wall;
+  if (Number.isFinite(tick.now)) tickNow = tick.now;
   if (tick.reset) builder.reset();
   if (tick.brand !== undefined) builder.setBrand(tick.brand);
   for (const [t, frames] of tick.can || []) builder.feedCan(wireFrames(frames), t);

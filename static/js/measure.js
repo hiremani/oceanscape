@@ -124,16 +124,18 @@ export class Measurements {
   }
 }
 
-// what the Reality View features are drawing and costing right now (buildings.js stats(), videoground.js stats)
+// what the Reality View features are drawing and costing right now (buildings.js stats(), videoground.js stats, npu.js stats)
 function featureSample(app) {
   let b = null, v = null;
   try { b = app.scene.buildings && app.scene.buildings.stats(); } catch { b = null; }
   v = app.videoGround && app.videoGround.stats;
   const buildings = !!(b && b.visible && b.tris > 0), camRoad = !!(v && v.on && v.framesUsed > 0);
+  const n = app.npu && app.npu.stats, npu = !!(n && n.on && n.running);
   return {
-    features: { buildings, camRoad },
+    features: { buildings, camRoad, npu },
     buildingTris: b ? b.tris : null,
     camRoad: camRoad ? { uploadMs: v.uploadMs, ageMs: v.ageMs } : null,
+    npu: npu ? { fps: n.fps, totalMs: n.ms && n.ms.total != null ? Number(n.ms.total) : null, ageMs: n.ageMs } : null,
   };
 }
 
