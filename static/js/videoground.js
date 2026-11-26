@@ -50,7 +50,7 @@ vec4 sampleCam(sampler2D tex, mat3 M, vec4 S, vec4 T, vec4 objs[${MAX_OBJECTS}],
   // the ground point where it was in the car frame at capture
   vec2 c = vec2(T.x * car.x - T.y * car.y + T.z, T.y * car.x + T.x * car.y + T.w);
   float f = c.x - uCam.x, l = c.y - uCam.y;
-  vec3 q = M * vec3(f, -l, uCam.z + uCam.w * f);
+  vec3 q = M * vec3(f, -l, uCam.z - uCam.w * f);   // a rising road comes up toward the camera (calib z down)
   if (q.z < 1e-3) return vec4(0.0);
   vec2 uv = q.xy / q.z / S.xy;
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);

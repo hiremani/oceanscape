@@ -20,7 +20,9 @@ test('car frame to calib frame: ahead of the camera, right positive, down to the
   assert.deepEqual(carToCalib(20, 2, 0, CAM), [21.6, -2, HEIGHT_INIT]);
   // a road rising ahead comes closer to the camera's height
   const p = carToCalib(20, 0, 0, { ...CAM, slope: 0.02 });
-  near(p[2], HEIGHT_INIT + 0.02 * 21.6);
+  near(p[2], HEIGHT_INIT - 0.02 * 21.6);
+  // and agrees with the ground fit: the lane lines of a road rising 1 % have z = h - 0.01 f
+  near(carToCalib(20, 0, 0, { ...CAM, h: 1.45, slope: groundFit({ pathZ: 1.3, lanes: [Array.from({ length: 33 }, (_, i) => [i * 2, 1.8, 1.45 - 0.01 * i * 2]), Array.from({ length: 33 }, (_, i) => [i * 2, -1.8, 1.45 - 0.01 * i * 2])], laneProbs: [0.9, 0.9] }).slope })[2], 1.45 - 0.01 * 21.6, 1e-6);
 });
 
 test('a point straight ahead on the road lands on the middle column, under the horizon', () => {

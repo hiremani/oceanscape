@@ -23,7 +23,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  *  rise per m ahead (calib z down gets smaller where the road rises)}. */
 export function carToCalib(x, y, up, cam) {
   const f = x - cam.x;
-  return [f, -(y - (cam.y || 0)), cam.h + (cam.slope || 0) * f - up];
+  return [f, -(y - (cam.y || 0)), cam.h - (cam.slope || 0) * f - up];
 }
 
 /** [u, v] in 0..1 of the stream (v down) for a calib-frame point, or null behind the camera or off the frame. */
