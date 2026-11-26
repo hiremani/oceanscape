@@ -128,6 +128,7 @@ class LocalServer(
                     path.startsWith("/map/tile/") -> serveTile(client, method, path, text)
                     path.startsWith("/map/features/") -> serveFeatures(client, method, path, text)
                     path.startsWith("/map/ways/") -> serveWays(client, method, path)
+                    path.startsWith("/map/buildings/") -> serveBuildings(client, method, path)
                     path.startsWith("/map/os/") || path.startsWith("/map/ossurf/") -> serveOs(client, method, path, text)
                     path == "/map/prefetch" || path == "/map/status" -> servePrefetch(client, method, path, text)
                     path.startsWith("/app/") -> serveApp(client, method, path, target.substringAfter('?', ""), text)
@@ -311,6 +312,19 @@ class LocalServer(
         val file = if (parsed == null || mapFeatures == null) null else mapFeatures.cell(parsed.first, parsed.second)
         if (file == null) {
             respond(out, 404, "Not Found", "text/plain", "no features for this cell".toByteArray(), emptyMap(), method == "HEAD")
+            return
+        }
+        respond(out, 200, "OK", "application/json", file.readBytes(), mapOf("Cache-Control" to "max-age=86400"), method == "HEAD")
+        out.flush()
+    }
+
+    /** A building cell's buildings (MapFeatures.buildings): from Overpass once, then from disk. */
+    private fun serveBuildings(client: Socket, method: String, path: String) {
+        val out = client.getOutputStream()
+        val parsed = MapFeatures.parseBuildingsPath(URLDecoder.decode(path, "UTF-8"))
+        val file = if (parsed == null || mapFeatures == null) null else mapFeatures.buildings(parsed.first, parsed.second)
+        if (file == null) {
+            respond(out, 404, "Not Found", "text/plain", "no buildings for this cell".toByteArray(), emptyMap(), method == "HEAD")
             return
         }
         respond(out, 200, "OK", "application/json", file.readBytes(), mapOf("Cache-Control" to "max-age=86400"), method == "HEAD")

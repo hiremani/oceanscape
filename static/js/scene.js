@@ -21,6 +21,7 @@ import { mapReference, mapRoadFrame, mapAlignMatrix, freshPlacement, lineAlong, 
 import { RoadNetwork } from './roadnet.js';
 import { MapFeatures } from './mapfeatures.js';
 import { RouteView } from './routeview.js';
+import { Buildings } from './buildings.js';   // [buildings] OSM buildings (buildings.js)
 import { STEER_RATIO } from './vehicle.js';
 
 const EGO_LEN = 4.775;
@@ -346,6 +347,7 @@ export class CarScene {
     this.roadnet = new RoadNetwork(this.mapGroup);
     this.mapFeatures = new MapFeatures(this.mapGroup);
     this.route = new RouteView(this.mapGroup);   // the nav app's route on the roads (navroute.js), set by setNav
+    this.buildings = new Buildings(this.mapGroup);   // [buildings] the map's buildings around the car (buildings.js)
     this.roadSrc = { mode: 'camera', pending: 0, lost: 0, fade: 0 };   // whose road is drawn: the map's or the cameras' (_road)
     this.place = freshPlacement();   // where the car is drawn across the map's road (mapsurface.js)
     this.lastMap = null;             // the last usable map match (kept through a short coast)
@@ -496,6 +498,7 @@ export class CarScene {
     this.roadnet.setTheme(t, dark);
     this.route.setTheme(dark);
     this.mapFeatures.setTheme(t, dark);
+    this.buildings.setTheme(t, dark);   // [buildings]
     this.mats.branchEdge.color.set(t.edge);
     this.mats.branchCenter.color.set(t.yellow);
     this.mats.branchLane.color.set(t.line);
@@ -1505,6 +1508,9 @@ export class CarScene {
       show: showMap && s.showNav !== false, clock: this.clock, dt });
     const f = this.state && this.state.fisker;
     this.ourSignal = this.mapFeatures.update(map, showMap && s.showSigns !== false, f ? f.tlr : null, this.pose, this.clock);
+    // [buildings] the map's buildings (buildings.js): placed by the pose origin, cells picked around the car, gone at perf.js's resolution floor
+    this.buildings.update({ pose: this.pose, origin: this.state && this.state.pose ? this.state.pose.origin : null, show: showMap && s.showBuildings !== false,
+      renderScale: this.renderScale, autoScale: (s.renderScale ?? 'auto') === 'auto', car: this.target, dt });
   }
 
   /** Give the map's ground-fixed layers the reference's rigid placement (mapsurface.js mapAlignMatrix). Without a

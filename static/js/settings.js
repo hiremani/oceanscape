@@ -536,6 +536,7 @@ export class Settings {
       ['mapRoad', 'Map road', 'Draw the road from the map: the roads around you, their junctions, and what stands along them, placed by the car\'s own motion with the GPS and heading eased in. The cameras\' lanes only pick the lane you\'re drawn in. Off, or without a map, the road is the cameras\' alone.'],
       ['showGround', 'Ground texture', 'Fine textured ground that moves under the car with its speed and steering.'],
       ['showSigns', 'Traffic lights & signs', 'The map\'s signals, stop and yield signs, limits and crossings where the map has them (the signal ahead shows the camera\'s light), and the lights, signs and stop lines the car\'s camera reports, placed where they most likely are.'],
+      ['showBuildings', 'Buildings', 'The map\'s buildings around you, as plain blocks at their mapped height (or a usual one for the kind of building). Hidden when the frame rate forces the lowest resolution.'],   // [buildings]
       ['showPath', 'Planned path', 'Blue band along openpilot\'s path while steering is engaged.'],
     ]));
     // the map around the car is downloaded ahead and kept (maptiles.py MapPrefetch)
