@@ -8,6 +8,7 @@ does on the car, and relays the comma bridge's endpoints to a sunnypilot device.
   python3 serve.py --bridge 127.0.0.1:8088      # a bridge on this PC: python -m openpilot.sunnypilot.webhud.server --replay ...
   python3 serve.py ... --npu-synth              # serve /npu (the NPU detector, static/js/npu.js) from tools/npu_synth.py
   python3 serve.py ... --npu-relay HOST:PORT    # ...or relay /npu and /npu/status to an app's LocalServer (e.g. adb forward)
+  python3 serve.py ... --npu-replay FILE.jsonl  # ...or serve recorded detections in step with a replay (tools/npu_replay.py)
 
 /map/buildings/<klat>/<klon> (static/js/buildings.js) is answered here, not relayed: the cell's buildings from the
 Overpass API, fetched once (one request at a time) and kept under ~/.cache/oceanscape/buildings, as the app's
@@ -43,6 +44,7 @@ BRIDGE_PORT = 8088            # the comma bridge
 BRIDGE: tuple[str, int] | None = None
 NPU_RELAY: tuple[str, int] | None = None   # --npu-relay: where /npu goes
 NPU_SYNTH = None                          # --npu-synth: tools/npu_synth.py's Synth
+NPU_REPLAY = None                         # --npu-replay: tools/npu_replay.py's Recorded
 
 
 def relayed(path: str) -> bool:
@@ -148,8 +150,15 @@ class Handler(SimpleHTTPRequestHandler):
   def npu(self, path: str) -> None:
     if NPU_RELAY is not None:
       return self.relay(NPU_RELAY)
+    if NPU_REPLAY is not None:
+      import npu_replay
+      if path == "/npu" and self.headers.get("Upgrade", "").lower() == "websocket":
+        return npu_replay.serve_ws(self, NPU_REPLAY)
+      if path == "/npu/status":
+        return self._json(NPU_REPLAY.status())
+      return self.send_error(404)
     if NPU_SYNTH is None:
-      return self.send_error(404, "no NPU detector: start with --npu-synth or --npu-relay")
+      return self.send_error(404, "no NPU detector: start with --npu-synth, --npu-replay or --npu-relay")
     import npu_synth
     if path == "/npu" and self.headers.get("Upgrade", "").lower() == "websocket":
       return npu_synth.serve_ws(self, NPU_SYNTH)
@@ -226,7 +235,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-  global BRIDGE, NPU_RELAY, NPU_SYNTH
+  global BRIDGE, NPU_RELAY, NPU_SYNTH, NPU_REPLAY
   ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
   ap.add_argument("--port", type=int, default=DEFAULT_PORT)
   ap.add_argument("--host", default="127.0.0.1", help="bind address (0.0.0.0 to reach it from another device)")
@@ -234,6 +243,7 @@ def main() -> None:
   ap.add_argument("--npu-synth", action="store_true", help="serve /npu from tools/npu_synth.py (a synthetic NPU detector)")
   ap.add_argument("--npu-cam-x", type=float, default=-1.7, help="the synthetic camera's place ahead of the bumper (m)")
   ap.add_argument("--npu-relay", help="relay /npu and /npu/status to host:port (an app's LocalServer)")
+  ap.add_argument("--npu-replay", help="serve /npu from recorded detections (JSON lines), in step with the bridge's replay")
   args = ap.parse_args()
   if args.npu_relay:
     host, _, port = args.npu_relay.rpartition(":")
@@ -246,6 +256,11 @@ def main() -> None:
   if args.bridge:
     host, _, port = args.bridge.rpartition(":") if ":" in args.bridge else (args.bridge, "", "")
     BRIDGE = (host, int(port or BRIDGE_PORT))
+  if args.npu_replay and not args.npu_relay:
+    import sys
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import npu_replay
+    NPU_REPLAY = npu_replay.Recorded(args.npu_replay, BRIDGE)
   ThreadingHTTPServer.daemon_threads = True
   ThreadingHTTPServer.allow_reuse_address = True
   httpd = ThreadingHTTPServer((args.host, args.port), Handler)
